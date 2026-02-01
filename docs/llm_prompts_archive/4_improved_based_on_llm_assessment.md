@@ -125,6 +125,25 @@ A Python application to discover, review, and create bidirectional links between
 | NFR3.2 | All actions controllable from the web UI (no separate CLI commands) |
 | NFR3.3 | Markdown rendered for readability in review interface |
 | NFR3.4 | Keyboard shortcuts for efficient review (optional enhancement) |
+| NFR3.5 | Dark mode theme only (no light mode or theme switching) |
+| NFR3.6 | Display progress bar during indexing operations |
+
+### NFR4: Observability
+
+| ID | Requirement |
+|----|-------------|
+| NFR4.1 | Use native Python `logging` module with global YAML configuration |
+| NFR4.2 | Log messages must follow the 5 Ws: Who, What, When, Where, Why |
+| NFR4.3 | Log file stored in `.obsidian-linker/logs/` inside the vault |
+| NFR4.4 | Support configurable log levels (DEBUG, INFO, WARNING, ERROR) |
+
+### NFR5: Extensibility
+
+| ID | Requirement |
+|----|-------------|
+| NFR5.1 | Embedding provider must use a shared abstract interface (Protocol/ABC) |
+| NFR5.2 | Easy to swap embedding implementations (e.g., model2vec, OpenAI, sentence-transformers) |
+| NFR5.3 | Embedding provider selection configurable without code changes |
 
 ---
 
@@ -151,6 +170,7 @@ api/  →  services/  →  infrastructure/
 obsidian-linker/
 ├── pyproject.toml
 ├── README.md
+├── logging.yaml                       # Global logging configuration
 ├── src/
 │   └── obsidian_linker/
 │       ├── __init__.py
@@ -170,7 +190,10 @@ obsidian-linker/
 │       │   ├── models.py              # DB table definitions
 │       │   ├── note_reader.py         # Read markdown files from vault
 │       │   ├── note_writer.py         # Safe atomic write operations
-│       │   ├── embeddings.py          # model2vec integration
+│       │   ├── embeddings/
+│       │   │   ├── __init__.py        # Exports EmbeddingProvider protocol
+│       │   │   ├── base.py            # EmbeddingProvider abstract interface
+│       │   │   └── model2vec_provider.py  # model2vec implementation
 │       │   └── lexical.py             # bm25s integration
 │       │
 │       ├── services/                  # Orchestration, use cases
@@ -219,13 +242,14 @@ obsidian-linker/
 | Web framework | FastAPI | Modern, async, good DX |
 | Templating | Jinja2 | Standard, well-integrated |
 | Frontend interactivity | HTMX | Partial updates, no build step |
-| CSS | Pico.css (CDN) | Classless, minimal effort |
+| CSS | Pico.css (CDN), dark mode only | Classless, minimal effort, matches Obsidian aesthetic |
 | Markdown rendering | mistune | Fast, minimal deps |
 | ORM | SQLModel | Pydantic integration, FastAPI author |
 | Embeddings | model2vec | Local, fast static embeddings |
 | Lexical search | bm25s | Actively maintained BM25 implementation |
 | Score fusion | Reciprocal Rank Fusion | Robust to scale differences |
 | Database | SQLite | Single file, simple |
+| Logging | Python `logging` + PyYAML | Native, configurable via YAML, 5 Ws format |
 
 ### Dependencies (pyproject.toml)
 
@@ -242,6 +266,7 @@ dependencies = [
     "mistune",
     "sqlmodel",
     "numpy",
+    "pyyaml",  # Logging configuration
 ]
 ```
 
@@ -255,6 +280,7 @@ dependencies = [
 | Lexical index | In-memory | Rebuilt on startup |
 | Review decisions | SQLite | `<vault>/.obsidian-linker/state.db` |
 | Audit log | SQLite | `<vault>/.obsidian-linker/state.db` |
+| Application logs | File | `<vault>/.obsidian-linker/logs/` |
 
 **Vault state location:** `.obsidian-linker/state.db` inside the selected vault (gitignore-able, travels with vault)
 
