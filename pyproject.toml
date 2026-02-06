@@ -4,4 +4,16 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi[standard]>=0.128.3",
+    "model2vec>=0.7.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipython>=9.10.0",
+    "pytest>=9.0.2",
+    "ruff>=0.15.0",
+    "ty>=0.0.15",
+    "wat-inspector>=0.4.3",
+]
