@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Obsidian Note Linker{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+<p>Vault: <code>{{ vault_path }}</code></p>
+
+<div class="grid">
+    <article>
+        <header><strong>Notes Indexed</strong></header>
+        <p style="font-size: 2rem; text-align: center;">&mdash;</p>
+        <footer><small>Run indexing to populate</small></footer>
+    </article>
+
+    <article>
+        <header><strong>Candidates Found</strong></header>
+        <p style="font-size: 2rem; text-align: center;">&mdash;</p>
+        <footer><small>Index notes first</small></footer>
+    </article>
+
+    <article>
+        <header><strong>Pending Links</strong></header>
+        <p style="font-size: 2rem; text-align: center;">&mdash;</p>
+        <footer><small>Review candidates first</small></footer>
+    </article>
+</div>
+
+<button disabled>Index Now</button>
+<small>Indexing will be available after implementing the semantic indexing feature.</small>
+{% endblock %}

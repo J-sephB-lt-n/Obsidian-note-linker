@@ -1,0 +1,19 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  five_ws:
+    # Who: %(name)s | What: %(message)s | When: %(asctime)s | Where: %(filename)s:%(lineno)d | Why: %(levelname)s
+    format: "%(asctime)s | %(levelname)-8s | %(name)s | %(filename)s:%(lineno)d | %(message)s"
+    datefmt: "%Y-%m-%dT%H:%M:%S"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: five_ws
+    stream: ext://sys.stderr
+
+root:
+  level: INFO
+  handlers:
+    - console

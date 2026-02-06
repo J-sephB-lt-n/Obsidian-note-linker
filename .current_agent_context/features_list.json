@@ -3,8 +3,8 @@
     "id": "slice-1-foundation-vault-config",
     "name": "Project Foundation + Vault Configuration",
     "description": "Project scaffolding (layered architecture, dependencies, logging, FastAPI + Jinja2 + HTMX + Pico.css dark mode). Vault path configuration (first-run prompt, settings page, persistence to ~/.config/obsidian-linker/). SQLite DB setup in .obsidian-linker/. Dashboard shell. Covers FR5, NFR3.1, NFR3.5, NFR4.",
-    "status": "NOT_STARTED",
-    "last_updated_at": "2026-02-06T19:52:07+00:00",
+    "status": "COMPLETE",
+    "last_updated_at": "2026-02-06T21:00:00+00:00",
     "dependencies": []
   },
   {

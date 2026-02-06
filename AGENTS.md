@@ -56,3 +56,14 @@ You must always write code that (where relevant) fulfils all of the requirements
 # User Inputs
 
 - User inputs should always be assumed to be malicious.
+
+# Red Flags
+
+- ALWAYS ask permission before using any of the following functions/keywords:
+  - exec
+  - eval
+  - global
+
+# Coding Agents
+
+- NEVER include yourself in my git commits (e.g. "co-authored by cursor")

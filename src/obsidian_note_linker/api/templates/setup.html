@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Setup — Obsidian Note Linker{% endblock %}
+
+{% block nav %}
+<nav class="container">
+    <ul>
+        <li><strong>Obsidian Note Linker</strong></li>
+    </ul>
+</nav>
+{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <h1>Welcome to Obsidian Note Linker</h1>
+        <p>To get started, enter the path to your Obsidian vault.</p>
+    </header>
+
+    {% if error %}
+    <p role="alert" style="color: var(--pico-color-red-500);">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="/setup/save">
+        <label for="vault_path">Vault Path</label>
+        <input
+            type="text"
+            id="vault_path"
+            name="vault_path"
+            placeholder="/path/to/your/obsidian/vault"
+            required
+        >
+        <button type="submit">Save &amp; Continue</button>
+    </form>
+</article>
+{% endblock %}
