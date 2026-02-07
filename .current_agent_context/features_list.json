@@ -11,8 +11,8 @@
     "id": "slice-2-semantic-indexing",
     "name": "Note Indexing — Semantic Embeddings",
     "description": "Vault scanner (read .md files, exclude .obsidian/). Note model with SHA256 content hash. Embedding provider abstract interface (Protocol/ABC) with model2vec default implementation. Embedding cache in SQLite keyed by content hash. Incremental re-indexing (only changed notes). Dashboard shows indexing status + 'Index Now' button with progress. Covers FR1.1, FR4.1-FR4.3, FR4.6-FR4.7, NFR2.1, NFR5.",
-    "status": "NOT_STARTED",
-    "last_updated_at": "2026-02-06T19:52:07+00:00",
+    "status": "COMPLETE",
+    "last_updated_at": "2026-02-07T00:00:00+00:00",
     "dependencies": ["slice-1-foundation-vault-config"]
   },
   {

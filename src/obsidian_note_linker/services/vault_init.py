@@ -4,6 +4,7 @@ import logging
 
 from sqlalchemy.engine import Engine
 
+import obsidian_note_linker.infrastructure.models  # noqa: F401  — register tables
 from obsidian_note_linker.domain.config import AppConfig
 from obsidian_note_linker.infrastructure.database import create_db_engine
 

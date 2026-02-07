@@ -8,9 +8,29 @@
 
 <div class="grid">
     <article>
+        <header><strong>Notes in Vault</strong></header>
+        <p style="font-size: 2rem; text-align: center;">
+            {% if status %}{{ status.total_notes_in_vault }}{% else %}&mdash;{% endif %}
+        </p>
+        <footer><small>Markdown files found</small></footer>
+    </article>
+
+    <article>
         <header><strong>Notes Indexed</strong></header>
-        <p style="font-size: 2rem; text-align: center;">&mdash;</p>
-        <footer><small>Run indexing to populate</small></footer>
+        <p style="font-size: 2rem; text-align: center;">
+            {% if status %}{{ status.notes_indexed }}{% else %}&mdash;{% endif %}
+        </p>
+        <footer>
+            <small>
+                {% if status and status.notes_needing_indexing > 0 %}
+                    {{ status.notes_needing_indexing }} note{{ "s" if status.notes_needing_indexing != 1 }} need indexing
+                {% elif status %}
+                    All notes indexed
+                {% else %}
+                    Unable to determine status
+                {% endif %}
+            </small>
+        </footer>
     </article>
 
     <article>
@@ -18,14 +38,29 @@
         <p style="font-size: 2rem; text-align: center;">&mdash;</p>
         <footer><small>Index notes first</small></footer>
     </article>
-
-    <article>
-        <header><strong>Pending Links</strong></header>
-        <p style="font-size: 2rem; text-align: center;">&mdash;</p>
-        <footer><small>Review candidates first</small></footer>
-    </article>
 </div>
 
-<button disabled>Index Now</button>
-<small>Indexing will be available after implementing the semantic indexing feature.</small>
+<div id="indexing-area">
+    {% if is_indexing %}
+        <article>
+            <header><strong>Indexing in Progress</strong></header>
+            <progress></progress>
+            <p>Indexing is running in another tab or session.</p>
+        </article>
+    {% elif status and status.notes_needing_indexing > 0 %}
+        <button hx-get="/indexing/start" hx-target="#indexing-area" hx-swap="innerHTML">
+            Index Now ({{ status.notes_needing_indexing }} note{{ "s" if status.notes_needing_indexing != 1 }})
+        </button>
+    {% elif status and status.notes_indexed > 0 %}
+        <button hx-get="/indexing/start" hx-target="#indexing-area" hx-swap="innerHTML">
+            Re-index All
+        </button>
+        <small>All notes are up to date. Click to force re-check.</small>
+    {% else %}
+        <button hx-get="/indexing/start" hx-target="#indexing-area" hx-swap="innerHTML">
+            Index Now
+        </button>
+        <small>Add markdown notes to your vault, then click to index.</small>
+    {% endif %}
+</div>
 {% endblock %}
