@@ -51,7 +51,35 @@
 - API indexing tests use a `_FakeEmbeddingProvider` injected into `app.state`.
 
 ### Known limitations / future work
-- "Candidates Found" and "Pending Links" dashboard cards are still placeholders (Slice 3+).
+- "Candidates Found" dashboard card was a placeholder (now populated by Slice 3).
 - No BM25 lexical index yet — needed for hybrid similarity in Slice 3.
 - No file-based logging yet (console only).
 - Embedding model is downloaded from HuggingFace on first use (requires internet).
+
+## Slice 3 — Candidate Generation: Lexical + Hybrid Ranking (2026-02-07)
+
+### What was built
+- **Domain**: `CandidatePair` frozen dataclass with per-direction scores (semantic similarity, BM25 scores, ranks) and combined RRF score. `explanation` property for human-readable reasoning. `pair_key` property for canonical sorted pair representation. `ranking.py` with RRF formula (`1/(k+rank)` for k=60) and `ranks_from_scores()` for converting scores to 1-based dense ranks. `related_section_parser.py` to parse `## Related` sections and extract linked note paths (handles percent-encoding, subdirectories, section boundaries).
+- **Infrastructure**: `DecisionRecord` SQLModel table with unique constraint on `(note_a_path, note_b_path)` for persisting YES/NO decisions with content hashes at decision time. `decision_store.py` with `save_decision()` (canonical path ordering, upsert support) and `get_valid_decisions()` (filters out stale decisions where note content has changed). `BM25Index` class wrapping `bm25s` for in-memory BM25 indexing with `get_pairwise_scores()` returning N×N score matrix (self-scores zeroed). `similarity.py` using numpy for efficient pairwise cosine similarity matrix computation. `get_all_embeddings()` added to `embedding_store.py`.
+- **Services**: `CandidateService` orchestrates candidate generation — loads indexed notes and embeddings, scans vault for content, builds BM25 index, computes pairwise cosine similarity, computes per-note rankings, applies RRF, filters bidirectionally-linked pairs and valid prior decisions, sorts by RRF score descending.
+- **API**: Dashboard "Candidates Found" card now shows count (greyed out with "—" until indexing has run, then shows actual count with "Pairs to review" footer). Indexing SSE stream now runs candidate generation after embedding phase and includes candidate count in completion summary. `candidate_count` stored in `app.state`.
+
+### Key design decisions
+- BM25 index built during "Index Now" (same time as semantic indexing) — not on app startup, since BM25 is only useful as part of hybrid search/candidate generation.
+- Decision table built ahead of slice 4 (review UI) — `DecisionRecord` stores paths in sorted order for canonical pair representation, with content hashes for staleness detection.
+- Candidate count stored in `app.state` (in-memory) — greyed out on app restart until indexing is re-run, per user preference.
+- Full pairwise matrix computed (not top-k) — for ~200 notes (~20,000 pairs) this is fast (<1 second).
+- RRF computed from both directions (A→B and B→A), taking the maximum — handles asymmetry in BM25 scores.
+- `_safe_next()` wrapper for generator consumption via `run_in_executor` — fixes a latent bug where `StopIteration` cannot propagate through asyncio executors (converted to `RuntimeError` by Python).
+- numpy used in infrastructure layer for cosine similarity (not domain) — keeps domain layer stdlib-only per architecture rule.
+
+### Test suite
+- 213 tests across all layers. All pass. `ruff check` and `ty check` clean.
+- Candidate service tests use a `_setup_indexed_vault()` helper that creates files, note records, and embeddings in one call.
+- Tests cover: candidate generation, RRF scoring, related section parsing, decision persistence/staleness, BM25 pairwise scoring, cosine similarity, dashboard candidate count display, candidate generation after indexing.
+
+### Known limitations / future work
+- "Pending Links" dashboard card is still a placeholder (Slice 5).
+- Candidate pairs not persisted to DB — recomputed each time indexing runs, count lost on restart.
+- No file-based logging yet (console only).
+- BM25 index is rebuilt from scratch on each indexing run (not incremental).

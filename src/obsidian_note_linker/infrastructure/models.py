@@ -3,11 +3,12 @@
 Tables:
     NoteRecord: Tracks indexed notes and their content hashes.
     EmbeddingRecord: Caches embedding vectors keyed by content hash.
+    DecisionRecord: Persists human review decisions (YES/NO) for note pairs.
 """
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, LargeBinary
+from sqlalchemy import Column, LargeBinary, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -43,5 +44,32 @@ class EmbeddingRecord(SQLModel, table=True):
     model_name: str
     dimension: int
     created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
+
+
+class DecisionRecord(SQLModel, table=True):
+    """Persisted human review decision for a candidate note pair.
+
+    Stores YES or NO decisions with the content hashes at the time of
+    the decision.  When either note is modified (hash changes), the
+    decision is considered invalid and the pair reappears for review.
+
+    Paths are stored in sorted order (note_a_path < note_b_path) to
+    ensure canonical pair representation.
+    """
+
+    __tablename__ = "decisions"
+    __table_args__ = (
+        UniqueConstraint("note_a_path", "note_b_path", name="uq_decision_pair"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    note_a_path: str = Field(index=True)
+    note_b_path: str = Field(index=True)
+    decision: str  # "YES" or "NO"
+    note_a_hash: str
+    note_b_hash: str
+    decided_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
     )

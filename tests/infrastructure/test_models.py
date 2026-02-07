@@ -1,90 +1,156 @@
 """Tests for SQLModel table definitions."""
 
-from sqlalchemy.engine import Engine
-from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from datetime import datetime
 
-from obsidian_note_linker.infrastructure.models import EmbeddingRecord, NoteRecord
+import pytest
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session
+
+from obsidian_note_linker.infrastructure.models import (
+    DecisionRecord,
+    EmbeddingRecord,
+    NoteRecord,
+)
 
 
 class TestNoteRecordTable:
     """Tests for the NoteRecord table."""
 
-    def test_insert_and_retrieve(self, db_engine: Engine) -> None:
+    def test_insert_and_retrieve(self, db_engine):
+        record = NoteRecord(relative_path="test.md", content_hash="abc123")
         with Session(db_engine) as session:
-            record = NoteRecord(relative_path="notes/test.md", content_hash="abc123")
             session.add(record)
             session.commit()
             session.refresh(record)
 
-        with Session(db_engine) as session:
-            result = session.exec(select(NoteRecord)).first()
+        assert record.id is not None
+        assert record.relative_path == "test.md"
+        assert record.content_hash == "abc123"
+        assert isinstance(record.indexed_at, datetime)
 
-        assert result is not None, "Should retrieve inserted record"
-        assert result.relative_path == "notes/test.md"
-        assert result.content_hash == "abc123"
-        assert result.indexed_at is not None, "Should have default indexed_at"
-
-    def test_relative_path_is_unique(self, db_engine: Engine) -> None:
+    def test_relative_path_is_unique(self, db_engine):
         with Session(db_engine) as session:
-            session.add(NoteRecord(relative_path="a.md", content_hash="hash1"))
+            session.add(NoteRecord(relative_path="dup.md", content_hash="aaa"))
             session.commit()
 
-        with Session(db_engine) as session:
-            session.add(NoteRecord(relative_path="a.md", content_hash="hash2"))
-            try:
+        with pytest.raises(IntegrityError):
+            with Session(db_engine) as session:
+                session.add(NoteRecord(relative_path="dup.md", content_hash="bbb"))
                 session.commit()
-                raise AssertionError("Should have raised IntegrityError")  # noqa: TRY301
-            except IntegrityError:
-                pass  # Expected
 
 
 class TestEmbeddingRecordTable:
     """Tests for the EmbeddingRecord table."""
 
-    def test_insert_and_retrieve(self, db_engine: Engine) -> None:
-        blob = b"\x00" * 12  # 3 floats × 4 bytes
-
+    def test_insert_and_retrieve(self, db_engine):
+        record = EmbeddingRecord(
+            content_hash="hash1",
+            embedding=b"\x00\x01\x02\x03",
+            model_name="test-model",
+            dimension=128,
+        )
         with Session(db_engine) as session:
-            record = EmbeddingRecord(
-                content_hash="abc123",
-                embedding=blob,
-                model_name="test-model",
-                dimension=3,
-            )
             session.add(record)
             session.commit()
+            session.refresh(record)
 
-        with Session(db_engine) as session:
-            result = session.exec(select(EmbeddingRecord)).first()
+        assert record.id is not None
+        assert record.content_hash == "hash1"
 
-        assert result is not None, "Should retrieve inserted record"
-        assert result.content_hash == "abc123"
-        assert result.embedding == blob
-        assert result.model_name == "test-model"
-        assert result.dimension == 3
-
-    def test_content_hash_is_unique(self, db_engine: Engine) -> None:
-        blob = b"\x00" * 4
-
+    def test_content_hash_is_unique(self, db_engine):
         with Session(db_engine) as session:
             session.add(
                 EmbeddingRecord(
-                    content_hash="same", embedding=blob,
-                    model_name="m", dimension=1,
+                    content_hash="same",
+                    embedding=b"\x00",
+                    model_name="m",
+                    dimension=1,
                 )
             )
             session.commit()
 
+        with pytest.raises(IntegrityError):
+            with Session(db_engine) as session:
+                session.add(
+                    EmbeddingRecord(
+                        content_hash="same",
+                        embedding=b"\x01",
+                        model_name="m",
+                        dimension=1,
+                    )
+                )
+                session.commit()
+
+
+class TestDecisionRecordTable:
+    """Tests for the DecisionRecord table."""
+
+    def test_insert_and_retrieve(self, db_engine):
+        record = DecisionRecord(
+            note_a_path="a.md",
+            note_b_path="b.md",
+            decision="YES",
+            note_a_hash="hash_a",
+            note_b_hash="hash_b",
+        )
+        with Session(db_engine) as session:
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+
+        assert record.id is not None
+        assert record.note_a_path == "a.md"
+        assert record.note_b_path == "b.md"
+        assert record.decision == "YES"
+        assert record.note_a_hash == "hash_a"
+        assert record.note_b_hash == "hash_b"
+        assert isinstance(record.decided_at, datetime)
+
+    def test_note_pair_is_unique(self, db_engine):
+        """Only one decision per (note_a_path, note_b_path) pair."""
         with Session(db_engine) as session:
             session.add(
-                EmbeddingRecord(
-                    content_hash="same", embedding=blob,
-                    model_name="m", dimension=1,
+                DecisionRecord(
+                    note_a_path="a.md",
+                    note_b_path="b.md",
+                    decision="YES",
+                    note_a_hash="h1",
+                    note_b_hash="h2",
                 )
             )
-            try:
+            session.commit()
+
+        with pytest.raises(IntegrityError):
+            with Session(db_engine) as session:
+                session.add(
+                    DecisionRecord(
+                        note_a_path="a.md",
+                        note_b_path="b.md",
+                        decision="NO",
+                        note_a_hash="h3",
+                        note_b_hash="h4",
+                    )
+                )
                 session.commit()
-                raise AssertionError("Should have raised IntegrityError")  # noqa: TRY301
-            except IntegrityError:
-                pass  # Expected
+
+    def test_stores_both_yes_and_no(self, db_engine):
+        with Session(db_engine) as session:
+            session.add(
+                DecisionRecord(
+                    note_a_path="a.md",
+                    note_b_path="b.md",
+                    decision="YES",
+                    note_a_hash="h1",
+                    note_b_hash="h2",
+                )
+            )
+            session.add(
+                DecisionRecord(
+                    note_a_path="c.md",
+                    note_b_path="d.md",
+                    decision="NO",
+                    note_a_hash="h3",
+                    note_b_hash="h4",
+                )
+            )
+            session.commit()

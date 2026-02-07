@@ -44,29 +44,36 @@ uv run ty check
 ```
 src/obsidian_note_linker/
 ├── domain/                  # Pure business logic, data structures (no external deps)
+│   ├── candidate.py         # CandidatePair model with scores and explanation
 │   ├── config.py            # AppConfig model, path constants
 │   ├── embedding_provider.py # EmbeddingProvider Protocol (swappable interface)
 │   ├── markdown_stripper.py # Strip markdown formatting for embedding
-│   └── note.py              # Note model, SHA256 content hashing
+│   ├── note.py              # Note model, SHA256 content hashing
+│   ├── ranking.py           # RRF score computation, score-to-rank conversion
+│   └── related_section_parser.py # Parse ## Related section links
 ├── infrastructure/          # I/O, external libraries, persistence
+│   ├── bm25_index.py        # BM25 lexical index (bm25s wrapper)
 │   ├── config_store.py      # Read/write ~/.config/obsidian-linker/config.json
 │   ├── database.py          # SQLite engine creation (WAL mode)
+│   ├── decision_store.py    # Decision CRUD (YES/NO with staleness detection)
 │   ├── embedding_store.py   # Embedding CRUD (binary blob storage)
 │   ├── logging_setup.py     # YAML-based logging configuration (console)
 │   ├── logging.yaml         # Logging format config (5 Ws)
 │   ├── model2vec_provider.py # Model2Vec embedding provider (potion-retrieval-32M)
-│   ├── models.py            # SQLModel tables (NoteRecord, EmbeddingRecord)
+│   ├── models.py            # SQLModel tables (NoteRecord, EmbeddingRecord, DecisionRecord)
 │   ├── note_store.py        # NoteRecord CRUD
+│   ├── similarity.py        # Pairwise cosine similarity (numpy)
 │   └── vault_scanner.py     # Scan vault for .md files (excl. .obsidian/)
 ├── services/                # Orchestrate infrastructure to fulfil use cases
+│   ├── candidate_service.py # Hybrid candidate generation (RRF + filtering)
 │   ├── config_service.py    # Vault path validation and persistence
 │   ├── indexing_service.py  # Incremental note indexing + embedding
 │   └── vault_init.py        # DB + logging initialisation for a vault
 ├── api/                     # HTTP routing, templates, user interaction
 │   ├── app.py               # FastAPI application factory
 │   ├── routes/
-│   │   ├── dashboard.py     # Dashboard page with indexing status (GET /)
-│   │   ├── indexing.py      # SSE indexing progress stream
+│   │   ├── dashboard.py     # Dashboard page with indexing + candidate status
+│   │   ├── indexing.py      # SSE indexing + candidate generation stream
 │   │   └── settings.py      # Setup + settings pages
 │   └── templates/           # Jinja2 templates (Pico.css dark mode + HTMX)
 └── __main__.py              # CLI entry point (obsidian-linker command)
@@ -113,4 +120,6 @@ api/  →  services/  →  infrastructure/
 | ORM | SQLModel |
 | Database | SQLite (WAL mode) |
 | Embeddings | model2vec (potion-retrieval-32M) |
+| Lexical search | bm25s (BM25 ranking) |
+| Score fusion | Reciprocal Rank Fusion (RRF) |
 | Logging | Python `logging` + PyYAML |

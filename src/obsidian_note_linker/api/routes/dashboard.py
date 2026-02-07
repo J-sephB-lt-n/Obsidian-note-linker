@@ -35,6 +35,8 @@ def dashboard(request: Request) -> Response:
         except Exception:
             logger.exception("Failed to get indexing status")
 
+    candidate_count: int | None = getattr(request.app.state, "candidate_count", None)
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -42,5 +44,6 @@ def dashboard(request: Request) -> Response:
             "vault_path": str(config.vault_path) if config else None,
             "status": status,
             "is_indexing": getattr(request.app.state, "is_indexing", False),
+            "candidate_count": candidate_count,
         },
     )

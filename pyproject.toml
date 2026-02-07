@@ -5,6 +5,7 @@ description = "Discover, review, and create bidirectional links between related 
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "bm25s>=0.2.14",
     "fastapi[standard]>=0.128.3",
     "model2vec>=0.7.0",
     "pyyaml>=6.0.3",

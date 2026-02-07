@@ -120,6 +120,21 @@ def save_embeddings(
     return saved
 
 
+def get_all_embeddings(engine: Engine) -> dict[str, list[float]]:
+    """Retrieve all cached embeddings from the database.
+
+    Args:
+        engine: SQLAlchemy engine.
+
+    Returns:
+        Mapping of content_hash → embedding vector for every cached
+        embedding.
+    """
+    with Session(engine) as session:
+        records = session.exec(select(EmbeddingRecord)).all()
+        return {r.content_hash: bytes_to_embedding(r.embedding) for r in records}
+
+
 def count_embeddings(engine: Engine) -> int:
     """Return the total number of cached embeddings.
 

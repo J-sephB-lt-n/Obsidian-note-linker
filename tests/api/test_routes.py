@@ -97,6 +97,28 @@ class TestDashboard:
         assert "vault" in response.text.lower()
 
 
+    def test_dashboard_shows_greyed_candidates_before_indexing(
+        self,
+        client_with_config: TestClient,
+    ) -> None:
+        response = client_with_config.get("/")
+
+        assert response.status_code == 200
+        assert "Run indexing to generate candidates" in response.text
+
+    def test_dashboard_shows_candidate_count_after_indexing(
+        self,
+        client_with_config: TestClient,
+    ) -> None:
+        # Simulate indexing having been run
+        client_with_config.app.state.candidate_count = 42  # type: ignore[union-attr]
+        response = client_with_config.get("/")
+
+        assert response.status_code == 200
+        assert "42" in response.text
+        assert "Pairs to review" in response.text
+
+
 class TestSettingsPage:
     """Tests for the settings page."""
 

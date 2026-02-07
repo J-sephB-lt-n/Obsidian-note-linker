@@ -3,18 +3,23 @@
 import asyncio
 import html
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
+from typing import TypeVar
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from starlette.responses import Response, StreamingResponse
 
 from obsidian_note_linker.infrastructure.model2vec_provider import Model2VecProvider
+from obsidian_note_linker.services.candidate_service import CandidateService
 from obsidian_note_linker.services.indexing_service import (
     IndexingProgress,
     IndexingResult,
     IndexingService,
 )
+
+_T = TypeVar("_T")
+_EXHAUSTED = object()
 
 logger = logging.getLogger(__name__)
 
@@ -89,20 +94,45 @@ async def indexing_stream(request: Request) -> StreamingResponse:
             gen = service.run_indexing()
             loop = asyncio.get_event_loop()
 
+            indexing_result: IndexingResult | None = None
             while True:
-                try:
-                    progress: IndexingProgress = await loop.run_in_executor(
-                        None, next, gen,
-                    )
-                except StopIteration:
+                value = await loop.run_in_executor(
+                    None, _safe_next, gen,
+                )
+                if value is _EXHAUSTED:
                     break
 
+                progress: IndexingProgress = value  # type: ignore[assignment]
                 if progress.result is not None:
-                    yield _format_sse(
-                        "complete", _render_complete(progress.result),
-                    )
+                    indexing_result = progress.result
                 else:
                     yield _format_sse("progress", _render_progress(progress))
+
+            # --- Generate candidates after indexing ---
+            yield _format_sse(
+                "progress",
+                "<progress></progress>"
+                "<p><small>candidates</small></p>"
+                "<p>Generating candidates...</p>",
+            )
+
+            candidate_service = CandidateService(
+                engine=request.app.state.db_engine,
+                vault_path=config.vault_path,
+            )
+            candidate_count = await loop.run_in_executor(
+                None, candidate_service.get_candidate_count,
+            )
+            request.app.state.candidate_count = candidate_count
+
+            assert indexing_result is not None, "Indexing should have produced a result"
+            yield _format_sse(
+                "complete",
+                _render_complete(
+                    result=indexing_result,
+                    candidate_count=candidate_count,
+                ),
+            )
 
         except Exception:
             logger.exception("Indexing failed")
@@ -121,6 +151,19 @@ async def indexing_stream(request: Request) -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+def _safe_next(gen: Generator[_T, None, None]) -> _T | object:
+    """Advance a generator, returning ``_EXHAUSTED`` instead of raising.
+
+    ``StopIteration`` cannot propagate through ``run_in_executor``
+    (Python wraps it in ``RuntimeError``), so this helper converts it
+    to a sentinel value.
+    """
+    try:
+        return next(gen)
+    except StopIteration:
+        return _EXHAUSTED
 
 
 def _get_or_create_provider(app_state: object) -> Model2VecProvider:
@@ -152,7 +195,7 @@ def _render_progress(progress: IndexingProgress) -> str:
     return f"<progress></progress><p><small>{phase}</small></p><p>{message}</p>"
 
 
-def _render_complete(result: IndexingResult) -> str:
+def _render_complete(result: IndexingResult, candidate_count: int) -> str:
     """Render the completion summary as an HTML fragment."""
     return (
         "<article>"
@@ -164,6 +207,7 @@ def _render_complete(result: IndexingResult) -> str:
         f"<p>Embeddings computed: {result.embeddings_computed} &bull; "
         f"Cached: {result.embeddings_cached}</p>"
         f"<p><strong>Total notes indexed: {result.total_notes_indexed}</strong></p>"
+        f"<p>Candidates found: {candidate_count}</p>"
         '<footer><a href="/" role="button">Back to Dashboard</a></footer>'
         "</article>"
     )

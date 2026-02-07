@@ -10,7 +10,11 @@ from obsidian_note_linker.services.config_service import ConfigService
 
 
 class _FakeEmbeddingProvider:
-    """Fast fake embedding provider for route tests."""
+    """Fast fake embedding provider for route tests.
+
+    Returns slightly different embeddings per text (based on length)
+    so pairwise similarity is meaningful.
+    """
 
     @property
     def model_name(self) -> str:
@@ -21,7 +25,7 @@ class _FakeEmbeddingProvider:
         return 3
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[0.1, 0.2, 0.3]] * len(texts)
+        return [[0.1 + i * 0.01, 0.2 + i * 0.02, 0.3] for i, _ in enumerate(texts)]
 
 
 @pytest.fixture
@@ -144,3 +148,29 @@ class TestIndexingStream:
         client_with_notes.get("/indexing/stream")
 
         assert client_with_notes.app.state.is_indexing is False  # type: ignore[union-attr]
+
+    def test_generates_candidates_after_indexing(
+        self, client_with_notes: TestClient,
+    ) -> None:
+        response = client_with_notes.get("/indexing/stream")
+        body = response.text
+
+        assert "Candidates found:" in body
+        assert "Generating candidates" in body
+
+    def test_sets_candidate_count_in_app_state(
+        self, client_with_notes: TestClient,
+    ) -> None:
+        client_with_notes.get("/indexing/stream")
+
+        count = client_with_notes.app.state.candidate_count  # type: ignore[union-attr]
+        assert isinstance(count, int)
+        assert count >= 0
+
+    def test_dashboard_shows_candidate_count_after_indexing(
+        self, client_with_notes: TestClient,
+    ) -> None:
+        client_with_notes.get("/indexing/stream")
+
+        dashboard = client_with_notes.get("/")
+        assert "Pairs to review" in dashboard.text

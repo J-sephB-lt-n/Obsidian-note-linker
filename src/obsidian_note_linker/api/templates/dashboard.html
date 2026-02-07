@@ -35,8 +35,22 @@
 
     <article>
         <header><strong>Candidates Found</strong></header>
-        <p style="font-size: 2rem; text-align: center;">&mdash;</p>
-        <footer><small>Index notes first</small></footer>
+        <p style="font-size: 2rem; text-align: center;">
+            {% if candidate_count is not none %}
+                {{ candidate_count }}
+            {% else %}
+                <span style="opacity: 0.4;">&mdash;</span>
+            {% endif %}
+        </p>
+        <footer>
+            <small>
+                {% if candidate_count is not none %}
+                    Pairs to review
+                {% else %}
+                    Run indexing to generate candidates
+                {% endif %}
+            </small>
+        </footer>
     </article>
 </div>
 

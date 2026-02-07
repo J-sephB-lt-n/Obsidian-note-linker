@@ -42,6 +42,7 @@ def create_app(config_path: Path | None = None) -> FastAPI:
     app.state.db_engine = None
     app.state.embedding_provider = None
     app.state.is_indexing = False
+    app.state.candidate_count = None
 
     # Load existing config and initialise vault state
     config = app.state.config_service.load_config()

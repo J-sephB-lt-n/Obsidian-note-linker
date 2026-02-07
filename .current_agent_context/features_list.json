@@ -13,15 +13,19 @@
     "description": "Vault scanner (read .md files, exclude .obsidian/). Note model with SHA256 content hash. Embedding provider abstract interface (Protocol/ABC) with model2vec default implementation. Embedding cache in SQLite keyed by content hash. Incremental re-indexing (only changed notes). Dashboard shows indexing status + 'Index Now' button with progress. Covers FR1.1, FR4.1-FR4.3, FR4.6-FR4.7, NFR2.1, NFR5.",
     "status": "COMPLETE",
     "last_updated_at": "2026-02-07T13:25:00+02:00",
-    "dependencies": ["slice-1-foundation-vault-config"]
+    "dependencies": [
+      "slice-1-foundation-vault-config"
+    ]
   },
   {
     "id": "slice-3-candidate-generation",
     "name": "Candidate Generation — Lexical + Hybrid Ranking",
     "description": "BM25 indexing (bm25s). RRF algorithm combining semantic (cosine similarity) and lexical (BM25) rankings. Candidate pair model with per-pair explanation (scores, matching terms). '## Related' section parser to detect existing links. Filtering: exclude already-linked pairs and previously-decided pairs. Dashboard shows candidate count. Covers FR1.2-FR1.6, FR4.4.",
-    "status": "NOT_STARTED",
-    "last_updated_at": "2026-02-06T19:52:07+00:00",
-    "dependencies": ["slice-2-semantic-indexing"]
+    "status": "COMPLETE",
+    "last_updated_at": "2026-02-07T20:58:58+00:00",
+    "dependencies": [
+      "slice-2-semantic-indexing"
+    ]
   },
   {
     "id": "slice-4-review-interface",
@@ -29,7 +33,9 @@
     "description": "Review session with configurable size (5-10 pairs). Side-by-side rendered markdown (mistune) with similarity scores and explanations. YES/NO/SKIP decisions persisted in SQLite with content hash at time of decision. Decision invalidation when notes are modified. SKIP does not persist. Random target ordering, candidates ranked by similarity. Manual note selection. Covers FR2, FR4.4-FR4.5, NFR2.2-NFR2.3, NFR3.3.",
     "status": "NOT_STARTED",
     "last_updated_at": "2026-02-06T19:52:07+00:00",
-    "dependencies": ["slice-3-candidate-generation"]
+    "dependencies": [
+      "slice-3-candidate-generation"
+    ]
   },
   {
     "id": "slice-5-link-application",
@@ -37,7 +43,9 @@
     "description": "Link format builder (Obsidian markdown). '## Related' section creation/appending. Diff preview in UI. Per-note confirmation before write. Atomic writes (temp file + rename). Duplicate link prevention. Bidirectional link insertion. Audit log of all file modifications in SQLite. Covers FR3, NFR1.",
     "status": "NOT_STARTED",
     "last_updated_at": "2026-02-06T19:52:07+00:00",
-    "dependencies": ["slice-4-review-interface"]
+    "dependencies": [
+      "slice-4-review-interface"
+    ]
   },
   {
     "id": "slice-6-link-integrity",
@@ -45,7 +53,9 @@
     "description": "Detect incomplete bidirectional links in '## Related' sections (A links to B but B does not link to A). Surface incomplete links in UI. User must resolve each by completing (add missing link) or removing (delete one-way link). All FR3 safety requirements apply (diff preview, per-note confirmation, atomic writes, audit log). Covers FR6.",
     "status": "NOT_STARTED",
     "last_updated_at": "2026-02-06T19:52:07+00:00",
-    "dependencies": ["slice-5-link-application"]
+    "dependencies": [
+      "slice-5-link-application"
+    ]
   },
   {
     "id": "slice-7-document-search",
@@ -53,7 +63,9 @@
     "description": "Dedicated search page accessible from main navigation. Free-text query input. Three search modes: FTS (BM25), Semantic (embedding cosine similarity), Hybrid (RRF). Mode selector (default: Hybrid). Ranked results with note title, relevance score, and content snippet. Click to view full rendered note. Warns if index is stale/empty. Reuses existing BM25 + embedding indexes. Covers FR7, NFR2.4.",
     "status": "NOT_STARTED",
     "last_updated_at": "2026-02-06T19:52:07+00:00",
-    "dependencies": ["slice-3-candidate-generation"]
+    "dependencies": [
+      "slice-3-candidate-generation"
+    ]
   },
   {
     "id": "quality-markdown-stripper-evaluation",
@@ -61,6 +73,8 @@
     "description": "Manually test strip_markdown() against real Obsidian notes to assess quality and identify weaknesses. Check edge cases: nested formatting, complex frontmatter, Obsidian callouts (> [!note]), Dataview queries, templater syntax, LaTeX math blocks, footnotes, tables, task lists, and other Obsidian-specific syntax. Fix any identified issues and add regression tests.",
     "status": "NOT_STARTED",
     "last_updated_at": "2026-02-07T13:50:00+02:00",
-    "dependencies": ["slice-2-semantic-indexing"]
+    "dependencies": [
+      "slice-2-semantic-indexing"
+    ]
   }
 ]

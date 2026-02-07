@@ -7,6 +7,7 @@ from obsidian_note_linker.infrastructure.embedding_store import (
     bytes_to_embedding,
     count_embeddings,
     embedding_to_bytes,
+    get_all_embeddings,
     get_cached_embeddings,
     save_embeddings,
 )
@@ -119,6 +120,28 @@ class TestGetCachedEmbeddings:
 
     def test_empty_hash_list_returns_empty(self, db_engine: Engine) -> None:
         assert get_cached_embeddings(db_engine, content_hashes=[]) == {}
+
+
+class TestGetAllEmbeddings:
+    """Tests for retrieving all embeddings at once."""
+
+    def test_returns_empty_when_no_embeddings(self, db_engine: Engine) -> None:
+        result = get_all_embeddings(db_engine)
+        assert result == {}
+
+    def test_returns_all_embeddings(self, db_engine: Engine) -> None:
+        save_embeddings(
+            db_engine,
+            content_hashes=["h1", "h2", "h3"],
+            embeddings=[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
+            model_name="test",
+            dimension=2,
+        )
+        result = get_all_embeddings(db_engine)
+        assert len(result) == 3
+        assert result["h1"] == pytest.approx([1.0, 2.0])
+        assert result["h2"] == pytest.approx([3.0, 4.0])
+        assert result["h3"] == pytest.approx([5.0, 6.0])
 
 
 class TestCountEmbeddings:
