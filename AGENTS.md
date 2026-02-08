@@ -45,6 +45,7 @@ You must always write code that (where relevant) fulfils all of the requirements
 
 - I don't believe in 100% test coverage, but please identify parts of the code which would be made more robust by adding tests and raise these with me.
 - The test suite is going to consist of hundreds of tests, so ensure that no individual unit test takes more than 1 second to run.
+- You are never allowed to delete or modify existing tests. If you have a compelling reason to do so, ask me directly for permission first.
 
 # Error Handling
 
