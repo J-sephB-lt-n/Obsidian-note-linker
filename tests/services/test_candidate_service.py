@@ -4,6 +4,7 @@ from pathlib import Path
 
 from sqlalchemy.engine import Engine
 
+from obsidian_note_linker.domain.progress import ProgressUpdate
 from obsidian_note_linker.infrastructure.decision_store import save_decision
 from obsidian_note_linker.infrastructure.embedding_store import save_embeddings
 from obsidian_note_linker.infrastructure.note_store import upsert_note_record
@@ -296,3 +297,155 @@ class TestCandidateServiceCount:
         count = service.get_candidate_count()
 
         assert count == len(candidates)
+
+
+class TestCandidateProgressReporting:
+    """Tests for progress reporting during candidate generation."""
+
+    def test_yields_progress_events(
+        self, vault_path: Path, db_engine: Engine,
+    ) -> None:
+        """generate_candidates_with_progress should yield ProgressUpdate events."""
+        notes = {
+            "a.md": "# A\n\nalpha content",
+            "b.md": "# B\n\nalpha content",
+        }
+        embeddings = {
+            "a.md": [0.9, 0.1],
+            "b.md": [0.85, 0.15],
+        }
+        _setup_indexed_vault(vault_path, db_engine, notes, embeddings)
+
+        service = CandidateService(engine=db_engine, vault_path=vault_path)
+        events = list(service.generate_candidates_with_progress())
+
+        assert len(events) >= 2, "Should yield multiple progress events"
+        assert all(
+            isinstance(e, ProgressUpdate) for e in events
+        ), "All events should be ProgressUpdate instances"
+
+    def test_progress_reaches_completion(
+        self, vault_path: Path, db_engine: Engine,
+    ) -> None:
+        """Final progress event should have current == total."""
+        notes = {
+            "a.md": "# A\n\nalpha content",
+            "b.md": "# B\n\nalpha content",
+        }
+        embeddings = {
+            "a.md": [0.9, 0.1],
+            "b.md": [0.85, 0.15],
+        }
+        _setup_indexed_vault(vault_path, db_engine, notes, embeddings)
+
+        service = CandidateService(engine=db_engine, vault_path=vault_path)
+        events = list(service.generate_candidates_with_progress())
+
+        last = events[-1]
+        assert last.current == last.total, (
+            f"Final event should show completion: {last.current}/{last.total}"
+        )
+
+    def test_progress_uses_candidates_phase(
+        self, vault_path: Path, db_engine: Engine,
+    ) -> None:
+        """All progress events should use the 'candidates' phase."""
+        notes = {
+            "a.md": "# A\n\nalpha content",
+            "b.md": "# B\n\nalpha content",
+        }
+        embeddings = {
+            "a.md": [0.9, 0.1],
+            "b.md": [0.85, 0.15],
+        }
+        _setup_indexed_vault(vault_path, db_engine, notes, embeddings)
+
+        service = CandidateService(engine=db_engine, vault_path=vault_path)
+        events = list(service.generate_candidates_with_progress())
+
+        assert all(
+            e.phase == "candidates" for e in events
+        ), "All events should use 'candidates' phase"
+
+    def test_progress_is_monotonically_non_decreasing(
+        self, vault_path: Path, db_engine: Engine,
+    ) -> None:
+        """Progress current should never decrease across events."""
+        notes = {
+            "a.md": "# A\n\nalpha content",
+            "b.md": "# B\n\nalpha content",
+            "c.md": "# C\n\ngamma content",
+        }
+        embeddings = {
+            "a.md": [0.9, 0.1],
+            "b.md": [0.85, 0.15],
+            "c.md": [0.1, 0.9],
+        }
+        _setup_indexed_vault(vault_path, db_engine, notes, embeddings)
+
+        service = CandidateService(engine=db_engine, vault_path=vault_path)
+        events = list(service.generate_candidates_with_progress())
+
+        for i in range(1, len(events)):
+            assert events[i].current >= events[i - 1].current, (
+                f"Progress decreased at event {i}: "
+                f"{events[i - 1].current} -> {events[i].current}"
+            )
+
+    def test_stores_candidates_after_progress_generation(
+        self, vault_path: Path, db_engine: Engine,
+    ) -> None:
+        """After consuming progress, candidates should be accessible."""
+        notes = {
+            "a.md": "# A\n\nalpha content",
+            "b.md": "# B\n\nalpha content",
+        }
+        embeddings = {
+            "a.md": [0.9, 0.1],
+            "b.md": [0.85, 0.15],
+        }
+        _setup_indexed_vault(vault_path, db_engine, notes, embeddings)
+
+        service = CandidateService(engine=db_engine, vault_path=vault_path)
+        # Consume all progress events
+        for _ in service.generate_candidates_with_progress():
+            pass
+
+        # Candidates should now be available
+        count = service.get_candidate_count()
+        assert count >= 1
+
+    def test_progress_with_fewer_than_two_notes(
+        self, vault_path: Path, db_engine: Engine,
+    ) -> None:
+        """With fewer than 2 notes, should still yield progress to completion."""
+        notes = {"only.md": "# Only\n\nSome content"}
+        embeddings = {"only.md": [1.0, 0.0]}
+        _setup_indexed_vault(vault_path, db_engine, notes, embeddings)
+
+        service = CandidateService(engine=db_engine, vault_path=vault_path)
+        events = list(service.generate_candidates_with_progress())
+
+        assert len(events) >= 1, "Should yield at least one progress event"
+        last = events[-1]
+        assert last.current == last.total, "Should reach completion"
+
+    def test_generate_candidates_still_returns_list(
+        self, vault_path: Path, db_engine: Engine,
+    ) -> None:
+        """Original generate_candidates() should still return a list."""
+        notes = {
+            "a.md": "# A\n\nalpha content",
+            "b.md": "# B\n\nalpha content",
+        }
+        embeddings = {
+            "a.md": [0.9, 0.1],
+            "b.md": [0.85, 0.15],
+        }
+        _setup_indexed_vault(vault_path, db_engine, notes, embeddings)
+
+        service = CandidateService(engine=db_engine, vault_path=vault_path)
+        candidates = service.generate_candidates()
+
+        assert isinstance(candidates, list)
+        assert len(candidates) >= 1

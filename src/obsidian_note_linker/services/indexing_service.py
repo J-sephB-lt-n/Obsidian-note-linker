@@ -14,6 +14,7 @@ from sqlalchemy.engine import Engine
 from obsidian_note_linker.domain.embedding_provider import EmbeddingProvider
 from obsidian_note_linker.domain.markdown_stripper import prepare_note_for_embedding
 from obsidian_note_linker.domain.note import Note
+from obsidian_note_linker.domain.progress import ProgressUpdate
 from obsidian_note_linker.infrastructure.embedding_store import (
     get_cached_embeddings,
     save_embeddings,
@@ -54,16 +55,13 @@ class IndexingResult:
 
 
 @dataclass(frozen=True)
-class IndexingProgress:
+class IndexingProgress(ProgressUpdate):
     """Progress update yielded during indexing.
 
-    When ``result`` is not None the indexing run has completed.
+    Extends ``ProgressUpdate`` with an optional ``result`` field
+    that is populated on the final yield to signal completion.
     """
 
-    phase: str
-    current: int
-    total: int
-    message: str
     result: IndexingResult | None = None
 
 
@@ -133,16 +131,29 @@ class IndexingService:
             4. **storing** — update note records in the database
             5. **complete** — final progress with ``result`` populated
 
+        Phases that have no work to do (e.g. embedding when nothing
+        changed) are skipped entirely — no events are yielded for them.
+
         Yields:
             IndexingProgress updates.  The final yield has ``result`` set.
         """
+        # --- Phase 1: Scanning ---
         yield IndexingProgress(
-            phase="scanning", current=0, total=0,
+            phase="scanning", current=0, total=1,
             message="Scanning vault for notes...",
         )
         vault_notes = scan_vault(self._vault_path)
+        yield IndexingProgress(
+            phase="scanning", current=1, total=1,
+            message=f"Found {len(vault_notes)} notes in vault",
+        )
 
-        # --- Diff with stored state ---
+        # --- Phase 2: Diffing ---
+        yield IndexingProgress(
+            phase="diffing", current=0, total=1,
+            message="Comparing with stored records...",
+        )
+
         stored_records = get_all_note_records(self._engine)
         stored_by_path: dict[str, str] = {
             r.relative_path: r.content_hash for r in stored_records
@@ -158,71 +169,116 @@ class IndexingService:
         total_to_embed = len(notes_to_embed)
 
         yield IndexingProgress(
-            phase="diffing", current=0, total=total_to_embed,
+            phase="diffing", current=1, total=1,
             message=(
                 f"Found {len(new_notes)} new, {len(changed_notes)} changed, "
                 f"{len(deleted_paths)} deleted, {len(unchanged_notes)} unchanged"
             ),
         )
 
-        # --- Check embedding cache ---
-        hashes_needed = [n.content_hash for n in notes_to_embed]
-        cached = get_cached_embeddings(self._engine, content_hashes=hashes_needed)
-        uncached_notes = [n for n in notes_to_embed if n.content_hash not in cached]
-        embeddings_cached = total_to_embed - len(uncached_notes)
-
-        logger.info(
-            "Embedding cache: %d hit(s), %d miss(es)",
-            embeddings_cached, len(uncached_notes),
-        )
-
-        # --- Compute embeddings in batches ---
-        embeddings_computed = 0
-        for batch_start in range(0, len(uncached_notes), EMBEDDING_BATCH_SIZE):
-            batch = uncached_notes[batch_start : batch_start + EMBEDDING_BATCH_SIZE]
-            batch_end = batch_start + len(batch)
-
+        # --- Phase 3: Embedding (skipped when nothing to embed) ---
+        if total_to_embed > 0:
             yield IndexingProgress(
-                phase="embedding",
-                current=batch_start,
-                total=len(uncached_notes),
-                message=f"Embedding notes {batch_start + 1}–{batch_end} of {len(uncached_notes)}...",
+                phase="embedding", current=0, total=total_to_embed,
+                message="Checking embedding cache...",
             )
 
-            texts = [
-                prepare_note_for_embedding(
-                    title=note.relative_path.stem,
-                    content=note.content,
-                )
-                for note in batch
+            hashes_needed = [n.content_hash for n in notes_to_embed]
+            cached = get_cached_embeddings(
+                self._engine, content_hashes=hashes_needed,
+            )
+            uncached_notes = [
+                n for n in notes_to_embed if n.content_hash not in cached
             ]
-            batch_embeddings = self._provider.embed(texts)
-            batch_hashes = [n.content_hash for n in batch]
+            embeddings_cached = total_to_embed - len(uncached_notes)
 
-            save_embeddings(
-                self._engine,
-                content_hashes=batch_hashes,
-                embeddings=batch_embeddings,
-                model_name=self._provider.model_name,
-                dimension=self._provider.dimension,
-            )
-            embeddings_computed += len(batch)
-
-        # --- Update note records ---
-        yield IndexingProgress(
-            phase="storing", current=0, total=len(notes_to_embed),
-            message="Updating note index...",
-        )
-
-        for note in notes_to_embed:
-            upsert_note_record(
-                self._engine,
-                relative_path=str(note.relative_path),
-                content_hash=note.content_hash,
+            logger.info(
+                "Embedding cache: %d hit(s), %d miss(es)",
+                embeddings_cached, len(uncached_notes),
             )
 
-        if deleted_paths:
-            delete_note_records(self._engine, relative_paths=deleted_paths)
+            # Advance progress immediately for cached embeddings
+            if embeddings_cached > 0:
+                yield IndexingProgress(
+                    phase="embedding",
+                    current=embeddings_cached,
+                    total=total_to_embed,
+                    message=f"{embeddings_cached} embeddings retrieved from cache",
+                )
+
+            # Compute embeddings in batches, yielding AFTER each batch
+            embeddings_computed = 0
+            for batch_start in range(0, len(uncached_notes), EMBEDDING_BATCH_SIZE):
+                batch = uncached_notes[
+                    batch_start : batch_start + EMBEDDING_BATCH_SIZE
+                ]
+
+                texts = [
+                    prepare_note_for_embedding(
+                        title=note.relative_path.stem,
+                        content=note.content,
+                    )
+                    for note in batch
+                ]
+                batch_embeddings = self._provider.embed(texts)
+                batch_hashes = [n.content_hash for n in batch]
+
+                save_embeddings(
+                    self._engine,
+                    content_hashes=batch_hashes,
+                    embeddings=batch_embeddings,
+                    model_name=self._provider.model_name,
+                    dimension=self._provider.dimension,
+                )
+                embeddings_computed += len(batch)
+
+                completed = embeddings_cached + embeddings_computed
+                yield IndexingProgress(
+                    phase="embedding",
+                    current=completed,
+                    total=total_to_embed,
+                    message=(
+                        f"Embedded {embeddings_computed} of "
+                        f"{len(uncached_notes)} notes"
+                    ),
+                )
+        else:
+            embeddings_cached = 0
+            embeddings_computed = 0
+
+        # --- Phase 4: Storing (skipped when nothing to store) ---
+        total_to_store = len(notes_to_embed) + len(deleted_paths)
+
+        if total_to_store > 0:
+            stored = 0
+            yield IndexingProgress(
+                phase="storing", current=0, total=total_to_store,
+                message="Updating note index...",
+            )
+
+            for note in notes_to_embed:
+                upsert_note_record(
+                    self._engine,
+                    relative_path=str(note.relative_path),
+                    content_hash=note.content_hash,
+                )
+                stored += 1
+                yield IndexingProgress(
+                    phase="storing",
+                    current=stored,
+                    total=total_to_store,
+                    message=f"Stored {stored} of {total_to_store} records",
+                )
+
+            if deleted_paths:
+                delete_note_records(self._engine, relative_paths=deleted_paths)
+                stored += len(deleted_paths)
+                yield IndexingProgress(
+                    phase="storing",
+                    current=stored,
+                    total=total_to_store,
+                    message=f"Deleted {len(deleted_paths)} stale records",
+                )
 
         total_indexed = count_note_records(self._engine)
 

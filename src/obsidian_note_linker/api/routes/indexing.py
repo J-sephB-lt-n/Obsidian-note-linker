@@ -10,6 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from starlette.responses import Response, StreamingResponse
 
+from obsidian_note_linker.domain.progress import ProgressUpdate
 from obsidian_note_linker.infrastructure.model2vec_provider import Model2VecProvider
 from obsidian_note_linker.services.candidate_service import CandidateService
 from obsidian_note_linker.services.indexing_service import (
@@ -109,22 +110,26 @@ async def indexing_stream(request: Request) -> StreamingResponse:
                     yield _format_sse("progress", _render_progress(progress))
 
             # --- Generate candidates after indexing ---
-            yield _format_sse(
-                "progress",
-                "<progress></progress>"
-                "<p><small>candidates</small></p>"
-                "<p>Generating candidates...</p>",
-            )
-
             candidate_service = CandidateService(
                 engine=request.app.state.db_engine,
                 vault_path=config.vault_path,
             )
-            candidates = await loop.run_in_executor(
-                None, candidate_service.generate_candidates,
-            )
-            request.app.state.candidates = candidates
-            candidate_count = len(candidates)
+            cand_gen = candidate_service.generate_candidates_with_progress()
+
+            while True:
+                cand_value = await loop.run_in_executor(
+                    None, _safe_next, cand_gen,
+                )
+                if cand_value is _EXHAUSTED:
+                    break
+                cand_progress: ProgressUpdate = cand_value  # type: ignore[assignment]
+                yield _format_sse(
+                    "progress", _render_progress(cand_progress),
+                )
+
+            candidates = candidate_service.get_candidate_count()
+            request.app.state.candidates = candidate_service._candidates
+            candidate_count = candidates
             request.app.state.candidate_count = candidate_count
 
             assert indexing_result is not None, "Indexing should have produced a result"
@@ -182,7 +187,7 @@ def _format_sse(event: str, data: str) -> str:
     return f"event: {event}\ndata: {lines}\n\n"
 
 
-def _render_progress(progress: IndexingProgress) -> str:
+def _render_progress(progress: ProgressUpdate) -> str:
     """Render a progress update as an HTML fragment."""
     phase = html.escape(progress.phase)
     message = html.escape(progress.message)

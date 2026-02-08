@@ -116,3 +116,35 @@
 - No keyboard shortcuts for review decisions (NFR3.4 — optional enhancement).
 - No file-based logging yet (console only).
 - BM25 index is rebuilt from scratch on each indexing run (not incremental).
+
+## Fix: Determinate Progress Bars During Indexing (2026-02-08)
+
+### Problem
+All progress bars during indexing showed indeterminate animation (repeated pulsing bar) instead of actual progress. Root causes:
+- Scanning/diffing phases used `total=0` (indeterminate) or yielded once with `current=0` that never advanced.
+- Embedding phase yielded progress at batch *start* (before work was done), not after completion. Cached embeddings were invisible in the progress.
+- Storing phase yielded `current=0` once and never updated during the upsert loop.
+- Candidate generation showed a single indeterminate bar with no sub-step reporting.
+
+### What was changed
+- **Domain**: Added `ProgressUpdate` frozen dataclass in `domain/progress.py` — generic progress type shared by indexing and candidate services.
+- **`IndexingProgress`** now inherits from `ProgressUpdate` (adds `result` field only).
+- **`IndexingService.run_indexing()`** — fixed all phases:
+  - **Scanning**: yields `(0,1)` start → `(1,1)` done with note count.
+  - **Diffing**: yields `(0,1)` start → `(1,1)` done with diff summary.
+  - **Embedding**: total = all notes to embed (cached + uncached). Cached embeddings advance progress immediately. Uncached batches yield AFTER completion, not before. Phase skipped entirely when nothing to embed.
+  - **Storing**: yields per-note progress during upserts + batch progress for deletions. Phase skipped when nothing to store.
+- **`CandidateService`** — added `generate_candidates_with_progress()` generator method yielding `ProgressUpdate` events across 4 sub-steps (load data, build BM25 index, compute similarity, rank+filter). Original `generate_candidates()` now wraps this.
+- **Indexing route** — candidate generation section consumes the progress generator with SSE streaming (same pattern as indexing). `_render_progress()` now accepts `ProgressUpdate` (parent type).
+
+### Key design decisions
+- **`ProgressUpdate` in domain layer** — generic, reusable type with no external deps. Services that need progress reporting use it directly; `IndexingProgress` extends it only to add the `result` field.
+- **Phases skipped when nothing to do** — no misleading 0% bars for empty work. If nothing changed, only scanning and diffing phases appear (both reach 100%).
+- **Cached embeddings reflected in progress** — user sees the bar jump forward proportionally to cache hits, then advance through remaining uncached batches.
+- **`generate_candidates_with_progress()` as generator** — follows the same pattern as `run_indexing()`. Original `generate_candidates()` preserved for backward compatibility.
+
+### Test suite
+- 287 tests across all layers. All pass. `ruff check` and `ty check` clean.
+- 12 new indexing service tests: scanning/diffing yield determinate (0/1→1/1), embedding advances per batch, embedding accounts for cache, all-cached completion, storing per-note progress, storing includes deletions, skipped phases, all phases reach completion, monotonically non-decreasing progress.
+- 7 new candidate service tests: yields events, reaches completion, uses "candidates" phase, monotonically non-decreasing, stores results, fewer-than-2 notes, backward compat.
+- 2 new route tests: candidate progress events in SSE, determinate progress bars in stream.

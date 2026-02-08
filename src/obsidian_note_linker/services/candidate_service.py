@@ -6,12 +6,14 @@ human review.  Filters out already-linked and previously-decided pairs.
 """
 
 import logging
+from collections.abc import Generator
 from pathlib import Path
 
 from sqlalchemy.engine import Engine
 
 from obsidian_note_linker.domain.candidate import CandidatePair
 from obsidian_note_linker.domain.markdown_stripper import prepare_note_for_embedding
+from obsidian_note_linker.domain.progress import ProgressUpdate
 from obsidian_note_linker.domain.ranking import compute_rrf_score, ranks_from_scores
 from obsidian_note_linker.domain.related_section_parser import get_existing_link_pairs
 from obsidian_note_linker.infrastructure.bm25_index import BM25Index
@@ -24,6 +26,8 @@ from obsidian_note_linker.infrastructure.similarity import (
 from obsidian_note_linker.infrastructure.vault_scanner import scan_vault
 
 logger = logging.getLogger(__name__)
+
+_CANDIDATE_STEPS = 4
 
 
 class CandidateService:
@@ -45,28 +49,56 @@ class CandidateService:
     def generate_candidates(self) -> list[CandidatePair]:
         """Generate ranked candidate pairs using hybrid similarity.
 
-        Steps:
-            1. Load all indexed notes and their embeddings.
-            2. Prepare texts and build BM25 index.
-            3. Compute pairwise semantic and lexical scores.
-            4. Combine rankings using RRF.
-            5. Filter out bidirectionally-linked pairs.
-            6. Filter out valid prior decisions (YES/NO).
-            7. Sort by RRF score descending.
+        Convenience wrapper around ``generate_candidates_with_progress``
+        that discards progress events and returns the result directly.
 
         Returns:
             List of candidate pairs sorted by RRF score (highest first).
         """
-        # 1. Load indexed notes and embeddings
+        for _ in self.generate_candidates_with_progress():
+            pass
+        assert self._candidates is not None, (
+            "generate_candidates_with_progress should have set _candidates"
+        )
+        return self._candidates
+
+    def generate_candidates_with_progress(
+        self,
+    ) -> Generator[ProgressUpdate, None, None]:
+        """Generate ranked candidate pairs, yielding progress updates.
+
+        Steps:
+            1. Load all indexed notes and their embeddings.
+            2. Build BM25 search index.
+            3. Compute pairwise semantic and lexical scores.
+            4. Rank using RRF and filter candidates.
+
+        After the generator is exhausted, results are available via
+        ``get_candidate_count()`` or the internal ``_candidates`` list.
+
+        Yields:
+            ProgressUpdate events with ``phase="candidates"``.
+        """
+        total = _CANDIDATE_STEPS
+
+        # --- Step 1: Load indexed data ---
+        yield ProgressUpdate(
+            phase="candidates", current=0, total=total,
+            message="Generating candidates — loading indexed data...",
+        )
+
         note_records = get_all_note_records(self._engine)
         if len(note_records) < 2:
             logger.info("Fewer than 2 indexed notes — no candidates to generate")
             self._candidates = []
-            return self._candidates
+            yield ProgressUpdate(
+                phase="candidates", current=total, total=total,
+                message="No candidates — fewer than 2 indexed notes",
+            )
+            return
 
         all_embeddings = get_all_embeddings(self._engine)
 
-        # Build ordered lists: paths, hashes, embeddings
         paths: list[str] = []
         hashes: list[str] = []
         embeddings: list[list[float]] = []
@@ -82,11 +114,20 @@ class CandidateService:
         if n < 2:
             logger.info("Fewer than 2 notes with embeddings — no candidates")
             self._candidates = []
-            return self._candidates
+            yield ProgressUpdate(
+                phase="candidates", current=total, total=total,
+                message="No candidates — fewer than 2 notes with embeddings",
+            )
+            return
 
         logger.info("Generating candidates for %d notes", n)
 
-        # 2. Prepare texts for BM25 and build index
+        # --- Step 2: Build BM25 search index ---
+        yield ProgressUpdate(
+            phase="candidates", current=1, total=total,
+            message=f"Building search index for {n} notes...",
+        )
+
         vault_notes = scan_vault(self._vault_path)
         note_content_by_path: dict[str, str] = {
             str(note.relative_path): note.content for note in vault_notes
@@ -101,18 +142,27 @@ class CandidateService:
         ]
         bm25_index = BM25Index(bm25_texts)
 
-        # 3. Compute pairwise scores
+        # --- Step 3: Compute pairwise similarity ---
+        yield ProgressUpdate(
+            phase="candidates", current=2, total=total,
+            message="Computing pairwise similarity...",
+        )
+
         semantic_matrix = compute_pairwise_cosine_similarity(embeddings)
         lexical_matrix = bm25_index.get_pairwise_scores()
 
-        # 4. Compute per-note rankings and RRF scores for all pairs
+        # --- Step 4: Rank and filter ---
+        yield ProgressUpdate(
+            phase="candidates", current=3, total=total,
+            message="Ranking and filtering candidates...",
+        )
+
         candidates = _compute_rrf_candidates(
             paths=paths,
             semantic_matrix=semantic_matrix,
             lexical_matrix=lexical_matrix,
         )
 
-        # 5. Filter out bidirectionally-linked pairs
         notes_by_path: dict[Path, str] = {
             Path(p): note_content_by_path.get(p, "") for p in paths
         }
@@ -123,7 +173,6 @@ class CandidateService:
         ]
         link_filtered = before_link_filter - len(candidates)
 
-        # 6. Filter out valid prior decisions
         current_hashes = dict(zip(paths, hashes))
         decided_pairs = get_valid_decisions(
             engine=self._engine, current_hashes=current_hashes,
@@ -134,7 +183,6 @@ class CandidateService:
         ]
         decision_filtered = before_decision_filter - len(candidates)
 
-        # 7. Sort by RRF score descending
         candidates.sort(key=lambda c: c.rrf_score, reverse=True)
 
         logger.info(
@@ -144,7 +192,11 @@ class CandidateService:
         )
 
         self._candidates = candidates
-        return self._candidates
+
+        yield ProgressUpdate(
+            phase="candidates", current=total, total=total,
+            message=f"Found {len(candidates)} candidates",
+        )
 
     def get_candidate_count(self) -> int:
         """Return the number of candidates from the last generation.
@@ -156,7 +208,9 @@ class CandidateService:
         """
         if self._candidates is None:
             self.generate_candidates()
-        assert self._candidates is not None, "generate_candidates should have set _candidates"
+        assert self._candidates is not None, (
+            "generate_candidates should have set _candidates"
+        )
         return len(self._candidates)
 
 

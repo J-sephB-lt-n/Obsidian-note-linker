@@ -174,3 +174,27 @@ class TestIndexingStream:
 
         dashboard = client_with_notes.get("/")
         assert "Review candidates" in dashboard.text
+
+    def test_streams_candidate_progress_events(
+        self, client_with_notes: TestClient,
+    ) -> None:
+        """SSE stream should include progress events during candidate generation."""
+        response = client_with_notes.get("/indexing/stream")
+        body = response.text
+
+        # Candidate progress events should be present
+        assert "candidates" in body.lower(), (
+            "Should contain candidate generation progress"
+        )
+
+    def test_progress_events_contain_determinate_bars(
+        self, client_with_notes: TestClient,
+    ) -> None:
+        """SSE progress events should contain progress bars with value attributes."""
+        response = client_with_notes.get("/indexing/stream")
+        body = response.text
+
+        # At least some progress events should have determinate bars (value="...")
+        assert 'value="' in body, (
+            "Should contain at least one determinate progress bar"
+        )
