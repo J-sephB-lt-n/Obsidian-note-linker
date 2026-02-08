@@ -116,7 +116,7 @@ class TestDashboard:
 
         assert response.status_code == 200
         assert "42" in response.text
-        assert "Pairs to review" in response.text
+        assert "Review candidates" in response.text
 
 
 class TestSettingsPage:

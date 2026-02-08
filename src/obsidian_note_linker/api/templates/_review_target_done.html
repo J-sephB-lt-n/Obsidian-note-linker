@@ -1,0 +1,24 @@
+<article>
+    <header><strong>Target Complete</strong></header>
+    <p>All candidates for <strong>{{ target_title }}</strong> have been reviewed.</p>
+    {% if remaining_candidates > 0 %}
+        <p>{{ remaining_candidates }} candidate pair{{ "s" if remaining_candidates != 1 }} remaining across other notes.</p>
+        <footer>
+            <div style="display: flex; gap: 1rem; justify-content: center;">
+                <button
+                    hx-get="/review/random-target"
+                    hx-target="#review-area"
+                    hx-swap="innerHTML"
+                >
+                    Random Target
+                </button>
+                <a href="/review" role="button" class="secondary">Choose a Note</a>
+            </div>
+        </footer>
+    {% else %}
+        <p>All candidate pairs have been reviewed!</p>
+        <footer>
+            <a href="/" role="button">Back to Dashboard</a>
+        </footer>
+    {% endif %}
+</article>

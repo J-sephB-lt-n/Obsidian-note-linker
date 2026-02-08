@@ -173,4 +173,4 @@ class TestIndexingStream:
         client_with_notes.get("/indexing/stream")
 
         dashboard = client_with_notes.get("/")
-        assert "Pairs to review" in dashboard.text
+        assert "Review candidates" in dashboard.text

@@ -59,6 +59,7 @@ src/obsidian_note_linker/
 │   ├── embedding_store.py   # Embedding CRUD (binary blob storage)
 │   ├── logging_setup.py     # YAML-based logging configuration (console)
 │   ├── logging.yaml         # Logging format config (5 Ws)
+│   ├── markdown_renderer.py # Markdown-to-HTML rendering (mistune)
 │   ├── model2vec_provider.py # Model2Vec embedding provider (potion-retrieval-32M)
 │   ├── models.py            # SQLModel tables (NoteRecord, EmbeddingRecord, DecisionRecord)
 │   ├── note_store.py        # NoteRecord CRUD
@@ -68,12 +69,15 @@ src/obsidian_note_linker/
 │   ├── candidate_service.py # Hybrid candidate generation (RRF + filtering)
 │   ├── config_service.py    # Vault path validation and persistence
 │   ├── indexing_service.py  # Incremental note indexing + embedding
+│   ├── review_service.py    # Human-in-the-loop review orchestration
 │   └── vault_init.py        # DB + logging initialisation for a vault
 ├── api/                     # HTTP routing, templates, user interaction
 │   ├── app.py               # FastAPI application factory
 │   ├── routes/
 │   │   ├── dashboard.py     # Dashboard page with indexing + candidate status
 │   │   ├── indexing.py      # SSE indexing + candidate generation stream
+│   │   ├── review.py        # Human-in-the-loop review (target selection, decisions)
+│   │   ├── search.py        # Document search (placeholder for Slice 7)
 │   │   └── settings.py      # Setup + settings pages
 │   └── templates/           # Jinja2 templates (Pico.css dark mode + HTMX)
 └── __main__.py              # CLI entry point (obsidian-linker command)
@@ -122,4 +126,5 @@ api/  →  services/  →  infrastructure/
 | Embeddings | model2vec (potion-retrieval-32M) |
 | Lexical search | bm25s (BM25 ranking) |
 | Score fusion | Reciprocal Rank Fusion (RRF) |
+| Markdown rendering | mistune |
 | Logging | Python `logging` + PyYAML |

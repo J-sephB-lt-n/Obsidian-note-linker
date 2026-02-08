@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Review — Obsidian Note Linker{% endblock %}
+
+{% block head %}
+<style>
+    .note-panel {
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 1rem;
+        border: 1px solid var(--pico-muted-border-color);
+        border-radius: var(--pico-border-radius);
+    }
+    .note-panel h1, .note-panel h2, .note-panel h3 {
+        margin-top: 0.5rem;
+    }
+    .decision-bar {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        margin-top: 1rem;
+    }
+    .decision-bar button {
+        min-width: 120px;
+    }
+    .btn-yes {
+        --pico-background-color: #2d7d46;
+        --pico-border-color: #2d7d46;
+    }
+    .btn-yes:hover {
+        --pico-background-color: #38a058;
+        --pico-border-color: #38a058;
+    }
+    .btn-no {
+        --pico-background-color: #b33;
+        --pico-border-color: #b33;
+    }
+    .btn-no:hover {
+        --pico-background-color: #d44;
+        --pico-border-color: #d44;
+    }
+    .score-bar {
+        text-align: center;
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+        opacity: 0.85;
+        font-size: 0.9rem;
+    }
+    .target-select-form {
+        display: flex;
+        gap: 0.5rem;
+        align-items: end;
+    }
+    .target-select-form select {
+        flex: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Review Candidates</h1>
+
+<div id="review-area">
+    {% if not has_candidates %}
+        <article>
+            <header><strong>No Candidates Available</strong></header>
+            <p>Run indexing from the <a href="/">Dashboard</a> to generate candidate pairs for review.</p>
+        </article>
+    {% else %}
+        <p>{{ total_candidates }} candidate pair{{ "s" if total_candidates != 1 }} across {{ target_count }} note{{ "s" if target_count != 1 }}.</p>
+
+        <div class="grid">
+            <article>
+                <header><strong>Random Target</strong></header>
+                <p>Pick a random note and review its top candidates.</p>
+                <button
+                    hx-get="/review/random-target"
+                    hx-target="#review-area"
+                    hx-swap="innerHTML"
+                >
+                    Random Target
+                </button>
+            </article>
+
+            <article>
+                <header><strong>Select a Note</strong></header>
+                <p>Choose a specific note to review candidates for.</p>
+                <form class="target-select-form"
+                      hx-get="/review/select-target"
+                      hx-target="#review-area"
+                      hx-swap="innerHTML"
+                >
+                    <select name="path" required>
+                        <option value="" disabled selected>Choose a note...</option>
+                        {% for target in targets %}
+                            <option value="{{ target.note_path }}">
+                                {{ target.title }} ({{ target.candidate_count }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit">Review</button>
+                </form>
+            </article>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

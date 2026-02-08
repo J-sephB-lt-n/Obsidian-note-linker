@@ -120,9 +120,11 @@ async def indexing_stream(request: Request) -> StreamingResponse:
                 engine=request.app.state.db_engine,
                 vault_path=config.vault_path,
             )
-            candidate_count = await loop.run_in_executor(
-                None, candidate_service.get_candidate_count,
+            candidates = await loop.run_in_executor(
+                None, candidate_service.generate_candidates,
             )
+            request.app.state.candidates = candidates
+            candidate_count = len(candidates)
             request.app.state.candidate_count = candidate_count
 
             assert indexing_result is not None, "Indexing should have produced a result"

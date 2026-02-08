@@ -83,3 +83,36 @@
 - Candidate pairs not persisted to DB — recomputed each time indexing runs, count lost on restart.
 - No file-based logging yet (console only).
 - BM25 index is rebuilt from scratch on each indexing run (not incremental).
+
+## Slice 4 — Human-in-the-Loop Review (2026-02-08)
+
+### What was built
+- **Infrastructure**: `markdown_renderer.py` wrapping mistune for markdown-to-HTML rendering. Module-level renderer instance for performance.
+- **Services**: `ReviewService` orchestrating the review workflow — target listing with candidate counts, candidate filtering per target (with skip support), random target selection, decision recording (looks up content hashes from DB, delegates to `decision_store`), note reading and rendering. `ReviewTarget` frozen dataclass for target summaries.
+- **API**: Review routes (`/review`, `/review/random-target`, `/review/select-target`, `/review/decide`). Search placeholder route (`/search`). Updated nav bar with Review and Search links. Dashboard "Candidates Found" card now links to review page when candidates > 0.
+- **Templates**: `review.html` (full page with target selection — random button + note dropdown), `_review_pair.html` (side-by-side rendered markdown with YES/NO/SKIP buttons and explanation bar), `_review_target_done.html` (target completion with next-target options), `search.html` (placeholder). Updated `base.html` and `dashboard.html`.
+- **App wiring**: `app.state.candidates` stores full candidate list after indexing (not just count). Indexing route now calls `generate_candidates()` instead of `get_candidate_count()`. Review routes registered in app factory.
+
+### Key design decisions
+- **No session size** — continuous flow per user preference. User reviews one pair at a time and exits when done.
+- **Target selection on each round** — user chooses between "Random Target" and "Select a Note" before each target's review. Targets listed alphabetically with candidate counts in a `<select>` dropdown.
+- **Candidates stored in `app.state.candidates`** (in-memory list) — after each YES/NO decision, the pair is removed from the list. On app restart, candidates are None and must be regenerated via indexing.
+- **SKIP tracking via hidden form field** — skipped pair keys passed as comma-separated `path_a|path_b` strings in form data. Only persists for the current target session; refreshing the page resets skips.
+- **Route convention matches existing pattern** — `APIRouter()` without prefix, explicit full paths (e.g. `/review`, `/review/decide`). Avoids FastAPI's trailing-slash redirect issue.
+- **Side-by-side layout using Pico.css grid** — scrollable note panels with max-height 60vh. Custom CSS for decision button colors (green YES, red NO, neutral SKIP).
+- **Decision recording looks up content hashes from NoteRecord table** — ensures hashes match what was indexed, enabling staleness detection.
+- **Search placeholder added now** — nav bar includes Search link pointing to a "Coming Soon" page, future-proofing the navigation for Slice 7.
+
+### Test suite
+- 267 tests across all layers. All pass. `ruff check` and `ty check` clean.
+- 11 tests for markdown renderer (headings, formatting, code, links, etc.)
+- 22 tests for review service (target listing, candidate filtering, decisions, rendering, random target)
+- 21 tests for review routes (review page states, random/select target, decide with YES/NO/SKIP, search placeholder, nav links, dashboard review link)
+- 2 pre-existing dashboard tests updated ("Pairs to review" → "Review candidates")
+
+### Known limitations / future work
+- "Pending Links" dashboard card is still a placeholder (Slice 5).
+- Candidate pairs stored in-memory only — lost on app restart, must re-index.
+- No keyboard shortcuts for review decisions (NFR3.4 — optional enhancement).
+- No file-based logging yet (console only).
+- BM25 index is rebuilt from scratch on each indexing run (not incremental).

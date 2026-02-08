@@ -1,0 +1,42 @@
+<article>
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>Reviewing: {{ target_title }}</strong>
+            <small>Candidate {{ candidate_index }} of {{ candidates_total }} for this note</small>
+        </div>
+    </header>
+</article>
+
+<div class="grid">
+    <article>
+        <header><strong>{{ target_title }}</strong> <small style="opacity:0.6;">{{ target_path }}</small></header>
+        <div class="note-panel">{{ target_html | safe }}</div>
+    </article>
+
+    <article>
+        <header><strong>{{ candidate_title }}</strong> <small style="opacity:0.6;">{{ candidate_path }}</small></header>
+        <div class="note-panel">{{ candidate_html | safe }}</div>
+    </article>
+</div>
+
+<div class="score-bar">
+    <small>{{ explanation }}</small>
+</div>
+
+<form hx-post="/review/decide" hx-target="#review-area" hx-swap="innerHTML">
+    <input type="hidden" name="target" value="{{ target_path }}">
+    <input type="hidden" name="candidate" value="{{ candidate_path }}">
+    <input type="hidden" name="skipped" value="{{ skipped_keys }}">
+
+    <div class="decision-bar">
+        <button type="submit" name="decision" value="YES" class="btn-yes">Yes — Link</button>
+        <button type="submit" name="decision" value="SKIP" class="secondary">Skip</button>
+        <button type="submit" name="decision" value="NO" class="btn-no">No</button>
+    </div>
+</form>
+
+<div style="text-align: center; margin-top: 0.5rem;">
+    <a href="/review" role="button" class="outline secondary" style="display: inline-block;">
+        Change Target
+    </a>
+</div>

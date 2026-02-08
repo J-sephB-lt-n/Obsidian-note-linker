@@ -44,8 +44,10 @@
         </p>
         <footer>
             <small>
-                {% if candidate_count is not none %}
-                    Pairs to review
+                {% if candidate_count is not none and candidate_count > 0 %}
+                    <a href="/review">Review candidates</a>
+                {% elif candidate_count is not none %}
+                    No pairs to review
                 {% else %}
                     Run indexing to generate candidates
                 {% endif %}
