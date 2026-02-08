@@ -47,21 +47,24 @@ src/obsidian_note_linker/
 │   ├── candidate.py         # CandidatePair model with scores and explanation
 │   ├── config.py            # AppConfig model, path constants
 │   ├── embedding_provider.py # EmbeddingProvider Protocol (swappable interface)
+│   ├── link_builder.py      # Obsidian link formatting, content insertion, diffs
 │   ├── markdown_stripper.py # Strip markdown formatting for embedding
 │   ├── note.py              # Note model, SHA256 content hashing
 │   ├── ranking.py           # RRF score computation, score-to-rank conversion
 │   └── related_section_parser.py # Parse ## Related section links
 ├── infrastructure/          # I/O, external libraries, persistence
+│   ├── audit_store.py       # Audit log CRUD (file modification tracking)
 │   ├── bm25_index.py        # BM25 lexical index (bm25s wrapper)
 │   ├── config_store.py      # Read/write ~/.config/obsidian-linker/config.json
-│   ├── database.py          # SQLite engine creation (WAL mode)
-│   ├── decision_store.py    # Decision CRUD (YES/NO with staleness detection)
+│   ├── database.py          # SQLite engine creation (WAL mode, migrations)
+│   ├── decision_store.py    # Decision CRUD (YES/NO with staleness + applied tracking)
 │   ├── embedding_store.py   # Embedding CRUD (binary blob storage)
+│   ├── file_writer.py       # Atomic file writer (temp + rename)
 │   ├── logging_setup.py     # YAML-based logging configuration (console)
 │   ├── logging.yaml         # Logging format config (5 Ws)
 │   ├── markdown_renderer.py # Markdown-to-HTML rendering (mistune)
 │   ├── model2vec_provider.py # Model2Vec embedding provider (potion-retrieval-32M)
-│   ├── models.py            # SQLModel tables (NoteRecord, EmbeddingRecord, DecisionRecord)
+│   ├── models.py            # SQLModel tables (NoteRecord, EmbeddingRecord, DecisionRecord, AuditRecord)
 │   ├── note_store.py        # NoteRecord CRUD
 │   ├── similarity.py        # Pairwise cosine similarity (numpy)
 │   └── vault_scanner.py     # Scan vault for .md files (excl. .obsidian/)
@@ -69,12 +72,14 @@ src/obsidian_note_linker/
 │   ├── candidate_service.py # Hybrid candidate generation (RRF + filtering)
 │   ├── config_service.py    # Vault path validation and persistence
 │   ├── indexing_service.py  # Incremental note indexing + embedding
+│   ├── link_service.py      # Safe bidirectional link application
 │   ├── review_service.py    # Human-in-the-loop review orchestration
 │   └── vault_init.py        # DB + logging initialisation for a vault
 ├── api/                     # HTTP routing, templates, user interaction
 │   ├── app.py               # FastAPI application factory
 │   ├── routes/
-│   │   ├── dashboard.py     # Dashboard page with indexing + candidate status
+│   │   ├── apply.py         # Safe link application (diff preview, confirm/skip)
+│   │   ├── dashboard.py     # Dashboard page with indexing + candidate + pending status
 │   │   ├── indexing.py      # SSE indexing + candidate generation stream
 │   │   ├── review.py        # Human-in-the-loop review (target selection, decisions)
 │   │   ├── search.py        # Document search (placeholder for Slice 7)

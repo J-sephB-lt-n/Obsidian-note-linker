@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Apply Links — Obsidian Note Linker{% endblock %}
+
+{% block head %}
+<style>
+    .diff-panel {
+        max-height: 40vh;
+        overflow-y: auto;
+        padding: 1rem;
+        border: 1px solid var(--pico-muted-border-color);
+        border-radius: var(--pico-border-radius);
+        font-family: monospace;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .diff-add {
+        color: #4caf50;
+    }
+    .diff-remove {
+        color: #f44336;
+    }
+    .diff-header {
+        color: #64b5f6;
+        font-weight: bold;
+    }
+    .diff-hunk {
+        color: #ce93d8;
+    }
+    .apply-bar {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        margin-top: 1rem;
+    }
+    .apply-bar button {
+        min-width: 140px;
+    }
+    .btn-apply {
+        --pico-background-color: #2d7d46;
+        --pico-border-color: #2d7d46;
+    }
+    .btn-apply:hover {
+        --pico-background-color: #38a058;
+        --pico-border-color: #38a058;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Apply Links</h1>
+
+<div id="apply-area">
+    {% if pending_count == 0 %}
+        <article>
+            <header><strong>No Pending Links</strong></header>
+            <p>There are no approved pairs waiting to be applied.</p>
+            <p>Review candidate pairs from the <a href="/review">Review</a> page first.</p>
+            <footer>
+                <a href="/" role="button" class="secondary">Back to Dashboard</a>
+            </footer>
+        </article>
+    {% else %}
+        <p>{{ pending_count }} approved pair{{ "s" if pending_count != 1 }} ready to apply.</p>
+        <p>Review the diff preview for each pair before confirming.</p>
+
+        <button
+            hx-get="/apply/next-pair"
+            hx-target="#apply-area"
+            hx-swap="innerHTML"
+        >
+            Begin Applying Links
+        </button>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,70 @@
+<article>
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>Link: {{ preview.note_a_title }} ↔ {{ preview.note_b_title }}</strong>
+            <small>{{ remaining }} pair{{ "s" if remaining != 1 }} remaining</small>
+        </div>
+    </header>
+</article>
+
+{% if not preview.has_changes %}
+    <article>
+        <p>Both notes already contain the required links. No changes needed.</p>
+    </article>
+{% else %}
+    {% if preview.note_a_diff %}
+    <article>
+        <header><strong>{{ preview.note_a_title }}</strong> <small style="opacity:0.6;">{{ preview.note_a_path }}</small></header>
+        <div class="diff-panel">
+{%- for line in preview.note_a_diff.split('\n') -%}
+{% if line.startswith('+++') or line.startswith('---') %}<span class="diff-header">{{ line }}</span>
+{% elif line.startswith('@@') %}<span class="diff-hunk">{{ line }}</span>
+{% elif line.startswith('+') %}<span class="diff-add">{{ line }}</span>
+{% elif line.startswith('-') %}<span class="diff-remove">{{ line }}</span>
+{% else %}{{ line }}
+{% endif %}
+{%- endfor -%}
+        </div>
+    </article>
+    {% endif %}
+
+    {% if preview.note_b_diff %}
+    <article>
+        <header><strong>{{ preview.note_b_title }}</strong> <small style="opacity:0.6;">{{ preview.note_b_path }}</small></header>
+        <div class="diff-panel">
+{%- for line in preview.note_b_diff.split('\n') -%}
+{% if line.startswith('+++') or line.startswith('---') %}<span class="diff-header">{{ line }}</span>
+{% elif line.startswith('@@') %}<span class="diff-hunk">{{ line }}</span>
+{% elif line.startswith('+') %}<span class="diff-add">{{ line }}</span>
+{% elif line.startswith('-') %}<span class="diff-remove">{{ line }}</span>
+{% else %}{{ line }}
+{% endif %}
+{%- endfor -%}
+        </div>
+    </article>
+    {% endif %}
+{% endif %}
+
+<div class="apply-bar">
+    {% if preview.has_changes %}
+    <form hx-post="/apply/confirm" hx-target="#apply-area" hx-swap="innerHTML" style="display:inline;">
+        <input type="hidden" name="pair_id" value="{{ pair_id }}">
+        <button type="submit" class="btn-apply">Apply Links</button>
+    </form>
+    {% else %}
+    <form hx-post="/apply/confirm" hx-target="#apply-area" hx-swap="innerHTML" style="display:inline;">
+        <input type="hidden" name="pair_id" value="{{ pair_id }}">
+        <button type="submit" class="secondary">Mark as Applied</button>
+    </form>
+    {% endif %}
+    <form hx-post="/apply/skip" hx-target="#apply-area" hx-swap="innerHTML" style="display:inline;">
+        <input type="hidden" name="pair_id" value="{{ pair_id }}">
+        <button type="submit" class="secondary outline">Skip</button>
+    </form>
+</div>
+
+<div style="text-align: center; margin-top: 0.5rem;">
+    <a href="/apply" role="button" class="outline secondary" style="display: inline-block;">
+        Back to Apply Overview
+    </a>
+</div>

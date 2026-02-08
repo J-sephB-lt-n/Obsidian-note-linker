@@ -4,6 +4,7 @@ Tables:
     NoteRecord: Tracks indexed notes and their content hashes.
     EmbeddingRecord: Caches embedding vectors keyed by content hash.
     DecisionRecord: Persists human review decisions (YES/NO) for note pairs.
+    AuditRecord: Logs all file modifications made by the application.
 """
 
 from datetime import datetime, timezone
@@ -71,5 +72,25 @@ class DecisionRecord(SQLModel, table=True):
     note_a_hash: str
     note_b_hash: str
     decided_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
+    applied_at: datetime | None = Field(default=None)
+
+
+class AuditRecord(SQLModel, table=True):
+    """Log entry for a file modification made by the application.
+
+    Every write to a note file is recorded here for auditability (FR3.6).
+    """
+
+    __tablename__ = "audit_log"
+
+    id: int | None = Field(default=None, primary_key=True)
+    note_path: str = Field(index=True)
+    action: str  # e.g. "ADD_LINK"
+    detail: str  # Human-readable description of the change
+    content_hash_before: str
+    content_hash_after: str
+    performed_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
     )

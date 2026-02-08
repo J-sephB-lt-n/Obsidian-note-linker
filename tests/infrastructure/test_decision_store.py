@@ -3,7 +3,9 @@
 from pathlib import Path
 
 from obsidian_note_linker.infrastructure.decision_store import (
+    get_pending_approved_pairs,
     get_valid_decisions,
+    mark_decision_applied,
     save_decision,
 )
 
@@ -184,3 +186,138 @@ class TestGetValidDecisions:
         )
         assert (Path("a.md"), Path("b.md")) in decisions
         assert (Path("c.md"), Path("d.md")) not in decisions
+
+
+class TestGetPendingApprovedPairs:
+    """Tests for retrieving YES decisions that haven't been applied yet."""
+
+    def test_returns_unapplied_yes_decisions(self, db_engine) -> None:
+        save_decision(
+            engine=db_engine,
+            note_a_path="a.md",
+            note_b_path="b.md",
+            decision="YES",
+            note_a_hash="h1",
+            note_b_hash="h2",
+        )
+        pairs = get_pending_approved_pairs(engine=db_engine)
+        assert len(pairs) == 1
+        assert pairs[0].note_a_path == "a.md"
+        assert pairs[0].note_b_path == "b.md"
+
+    def test_excludes_no_decisions(self, db_engine) -> None:
+        save_decision(
+            engine=db_engine,
+            note_a_path="a.md",
+            note_b_path="b.md",
+            decision="NO",
+            note_a_hash="h1",
+            note_b_hash="h2",
+        )
+        pairs = get_pending_approved_pairs(engine=db_engine)
+        assert len(pairs) == 0
+
+    def test_excludes_already_applied(self, db_engine) -> None:
+        save_decision(
+            engine=db_engine,
+            note_a_path="a.md",
+            note_b_path="b.md",
+            decision="YES",
+            note_a_hash="h1",
+            note_b_hash="h2",
+        )
+        mark_decision_applied(
+            engine=db_engine,
+            note_a_path="a.md",
+            note_b_path="b.md",
+        )
+        pairs = get_pending_approved_pairs(engine=db_engine)
+        assert len(pairs) == 0
+
+    def test_returns_empty_when_no_decisions(self, db_engine) -> None:
+        pairs = get_pending_approved_pairs(engine=db_engine)
+        assert pairs == []
+
+    def test_returns_multiple_pending_pairs(self, db_engine) -> None:
+        save_decision(
+            engine=db_engine,
+            note_a_path="a.md",
+            note_b_path="b.md",
+            decision="YES",
+            note_a_hash="h1",
+            note_b_hash="h2",
+        )
+        save_decision(
+            engine=db_engine,
+            note_a_path="c.md",
+            note_b_path="d.md",
+            decision="YES",
+            note_a_hash="h3",
+            note_b_hash="h4",
+        )
+        pairs = get_pending_approved_pairs(engine=db_engine)
+        assert len(pairs) == 2
+
+
+class TestMarkDecisionApplied:
+    """Tests for marking a decision as applied."""
+
+    def test_marks_decision_as_applied(self, db_engine) -> None:
+        save_decision(
+            engine=db_engine,
+            note_a_path="a.md",
+            note_b_path="b.md",
+            decision="YES",
+            note_a_hash="h1",
+            note_b_hash="h2",
+        )
+        mark_decision_applied(
+            engine=db_engine,
+            note_a_path="a.md",
+            note_b_path="b.md",
+        )
+        pairs = get_pending_approved_pairs(engine=db_engine)
+        assert len(pairs) == 0
+
+    def test_handles_reversed_path_order(self, db_engine) -> None:
+        """Paths are canonicalized, so order shouldn't matter."""
+        save_decision(
+            engine=db_engine,
+            note_a_path="a.md",
+            note_b_path="b.md",
+            decision="YES",
+            note_a_hash="h1",
+            note_b_hash="h2",
+        )
+        mark_decision_applied(
+            engine=db_engine,
+            note_a_path="b.md",
+            note_b_path="a.md",
+        )
+        pairs = get_pending_approved_pairs(engine=db_engine)
+        assert len(pairs) == 0
+
+    def test_applied_at_is_set(self, db_engine) -> None:
+        save_decision(
+            engine=db_engine,
+            note_a_path="a.md",
+            note_b_path="b.md",
+            decision="YES",
+            note_a_hash="h1",
+            note_b_hash="h2",
+        )
+        record = mark_decision_applied(
+            engine=db_engine,
+            note_a_path="a.md",
+            note_b_path="b.md",
+        )
+        assert record is not None
+        assert record.applied_at is not None
+
+    def test_returns_none_for_nonexistent_pair(self, db_engine) -> None:
+        result = mark_decision_applied(
+            engine=db_engine,
+            note_a_path="nonexistent.md",
+            note_b_path="also_missing.md",
+        )
+        assert result is None

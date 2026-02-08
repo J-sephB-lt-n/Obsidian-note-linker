@@ -54,6 +54,22 @@
             </small>
         </footer>
     </article>
+
+    <article>
+        <header><strong>Pending Links</strong></header>
+        <p style="font-size: 2rem; text-align: center;">
+            {{ pending_links_count }}
+        </p>
+        <footer>
+            <small>
+                {% if pending_links_count > 0 %}
+                    <a href="/apply">Apply pending links</a>
+                {% else %}
+                    No links waiting to apply
+                {% endif %}
+            </small>
+        </footer>
+    </article>
 </div>
 
 <div id="indexing-area">

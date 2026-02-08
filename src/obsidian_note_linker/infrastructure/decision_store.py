@@ -7,6 +7,7 @@ note has since been modified) can be detected and excluded.
 """
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy.engine import Engine
@@ -122,3 +123,64 @@ def get_valid_decisions(
             valid.add((Path(record.note_a_path), Path(record.note_b_path)))
 
     return valid
+
+
+def get_pending_approved_pairs(engine: Engine) -> list[DecisionRecord]:
+    """Retrieve YES decisions that have not yet been applied.
+
+    Returns decisions where ``decision == "YES"`` and ``applied_at``
+    is ``None``.
+
+    Args:
+        engine: SQLAlchemy engine.
+
+    Returns:
+        List of unapplied YES DecisionRecords.
+    """
+    with Session(engine) as session:
+        stmt = (
+            select(DecisionRecord)
+            .where(DecisionRecord.decision == "YES")
+            .where(DecisionRecord.applied_at == None)  # noqa: E711
+        )
+        return list(session.exec(stmt).all())
+
+
+def mark_decision_applied(
+    engine: Engine,
+    note_a_path: str,
+    note_b_path: str,
+) -> DecisionRecord | None:
+    """Mark a decision as applied by setting ``applied_at``.
+
+    Paths are canonicalized (sorted) before lookup, so order does
+    not matter.
+
+    Args:
+        engine: SQLAlchemy engine.
+        note_a_path: Relative path of first note.
+        note_b_path: Relative path of second note.
+
+    Returns:
+        The updated DecisionRecord, or None if no matching decision exists.
+    """
+    sorted_paths = sorted([note_a_path, note_b_path])
+    canon_a, canon_b = sorted_paths[0], sorted_paths[1]
+
+    with Session(engine) as session:
+        record = session.exec(
+            select(DecisionRecord).where(
+                DecisionRecord.note_a_path == canon_a,
+                DecisionRecord.note_b_path == canon_b,
+            )
+        ).first()
+
+        if record is None:
+            return None
+
+        record.applied_at = datetime.now(timezone.utc)
+        session.add(record)
+        session.commit()
+        session.refresh(record)
+        logger.debug("Marked decision as applied: (%s, %s)", canon_a, canon_b)
+        return record

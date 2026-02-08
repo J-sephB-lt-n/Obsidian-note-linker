@@ -5,6 +5,9 @@ import logging
 from fastapi import APIRouter, Request
 from starlette.responses import Response
 
+from obsidian_note_linker.infrastructure.decision_store import (
+    get_pending_approved_pairs,
+)
 from obsidian_note_linker.services.indexing_service import (
     IndexingStatus,
     get_indexing_status,
@@ -37,6 +40,13 @@ def dashboard(request: Request) -> Response:
 
     candidate_count: int | None = getattr(request.app.state, "candidate_count", None)
 
+    pending_links_count = 0
+    if engine is not None:
+        try:
+            pending_links_count = len(get_pending_approved_pairs(engine=engine))
+        except Exception:
+            logger.exception("Failed to get pending links count")
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -45,5 +55,6 @@ def dashboard(request: Request) -> Response:
             "status": status,
             "is_indexing": getattr(request.app.state, "is_indexing", False),
             "candidate_count": candidate_count,
+            "pending_links_count": pending_links_count,
         },
     )

@@ -148,3 +148,30 @@ All progress bars during indexing showed indeterminate animation (repeated pulsi
 - 12 new indexing service tests: scanning/diffing yield determinate (0/1→1/1), embedding advances per batch, embedding accounts for cache, all-cached completion, storing per-note progress, storing includes deletions, skipped phases, all phases reach completion, monotonically non-decreasing progress.
 - 7 new candidate service tests: yields events, reaches completion, uses "candidates" phase, monotonically non-decreasing, stores results, fewer-than-2 notes, backward compat.
 - 2 new route tests: candidate progress events in SSE, determinate progress bars in stream.
+
+## Slice 5 — Safe Link Creation (2026-02-08)
+
+### What was built
+- **Domain**: `link_builder.py` with `format_obsidian_link()` (Obsidian markdown link format with percent-encoding), `insert_links_into_content()` (creates/appends `## Related` section, duplicate prevention via `related_section_parser`), and `compute_content_diff()` (unified diff for preview).
+- **Infrastructure**: `AuditRecord` SQLModel table for logging all file modifications (FR3.6). `audit_store.py` with `save_audit_entry()` and `get_audit_log()`. `file_writer.py` with `atomic_write()` using temp-file-then-rename (FR3.5). `applied_at` nullable datetime added to `DecisionRecord` for tracking applied decisions. `decision_store.py` extended with `get_pending_approved_pairs()` (unapplied YES decisions) and `mark_decision_applied()`. DB migration in `database.py` to add `applied_at` column to existing databases.
+- **Services**: `LinkService` orchestrating the full link-application workflow — `get_pending_pairs()`, `preview_pair()` (generates `PairDiffPreview` with unified diffs for both notes), and `apply_pair()` (reads notes, inserts links, writes atomically, creates audit entries, marks decision as applied). Only writes notes that actually change (skips if link already exists).
+- **API**: Apply routes (`/apply`, `/apply/next-pair`, `/apply/confirm`, `/apply/skip`). Templates: `apply.html` (landing page with pending count + "Begin" button), `_apply_pair.html` (side-by-side diff preview with syntax-coloured unified diff, Apply/Skip buttons), `_apply_done.html` (completion/error partial). "Apply" added to nav bar in `base.html`. "Pending Links" card added to dashboard with live count from DB. Dashboard route updated to query `get_pending_approved_pairs()`.
+
+### Key design decisions
+- **`applied_at` on `DecisionRecord`** — simplest approach to track which YES decisions have been applied. Nullable (None = not yet applied). Avoids a separate tracking table.
+- **DB migration via `_run_migrations()` in `database.py`** — idempotent ALTER TABLE guarded by column existence check, safe to run on every startup. Handles existing databases that lack the `applied_at` column.
+- **Pair-by-pair UX** — user reviews one pair at a time with diff preview, then confirms or skips. Applied pairs are immediately marked, so re-loading the page shows accurate remaining count.
+- **Skip during apply is transient** — skipping a pair during the apply flow just moves to the next pair. The skipped pair remains pending and will reappear on the next visit.
+- **No-op detection** — if both notes already have the required links (e.g. manually added), `insert_links_into_content` returns unchanged content, no file write occurs, and no audit entry is created. The decision is still marked as applied.
+- **Diff preview uses `difflib.unified_diff`** — stdlib, no dependencies. Template renders with CSS syntax colouring (green for additions, red for removals, blue for headers, purple for hunk markers).
+- **Atomic writes via `tempfile.mkstemp` + `Path.rename`** — temp file created in same directory as target (same filesystem), ensuring atomic rename on POSIX.
+- **Audit log records content hashes before and after** — enables verification that the expected change was applied.
+
+### Test suite
+- 359 tests across all layers. All pass. `ruff check` and `ty check` clean.
+- 20 domain tests: link formatting (simple, spaces, subdirectory, special chars), content insertion (create section, append, duplicate prevention, multiple links, before next heading, preserves content), diff computation (added lines, filename header, empty diff, context).
+- 8 audit store tests: save entry, timestamp, multiple entries, filter by note, all entries, ordering.
+- 9 new decision store tests: pending approved pairs (returns unapplied YES, excludes NO, excludes applied, empty, multiple), mark applied (marks, reversed order, timestamp, nonexistent).
+- 6 file writer tests: writes content, creates file, preserves on failure, no temp files left, UTF-8, nested path.
+- 14 link service tests: get pending pairs, preview diffs (both notes, link content, already exists, titles), apply (writes files, creates section, marks applied, audit entries, no duplicates, no-op skips write, spaces in paths, missing file).
+- 15 apply route tests: page states (configured, no pending, count, start button), next pair (diff preview, titles, done), confirm (applies + shows next, writes to disk, done after last), skip (doesn't apply), nav link, dashboard pending links card (count, zero, link to apply).
