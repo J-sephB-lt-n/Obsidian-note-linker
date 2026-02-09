@@ -1,0 +1,47 @@
+<article>
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>
+                {% if action == "complete" %}
+                    Complete: Add link in {{ modified_note_title }}
+                {% else %}
+                    Remove: Delete link from {{ modified_note_title }}
+                {% endif %}
+            </strong>
+            <small>{{ source_title }} ↔ {{ target_title }}</small>
+        </div>
+    </header>
+</article>
+
+<article>
+    <header>
+        <strong>{{ modified_note_title }}</strong>
+        <small style="opacity:0.6;">{{ modified_note_path }}</small>
+    </header>
+    <div class="diff-panel">
+{%- for line in diff.split('\n') -%}
+{% if line.startswith('+++') or line.startswith('---') %}<span class="diff-header">{{ line }}</span>
+{% elif line.startswith('@@') %}<span class="diff-hunk">{{ line }}</span>
+{% elif line.startswith('+') %}<span class="diff-add">{{ line }}</span>
+{% elif line.startswith('-') %}<span class="diff-remove">{{ line }}</span>
+{% else %}{{ line }}
+{% endif %}
+{%- endfor -%}
+    </div>
+</article>
+
+<div class="integrity-bar">
+    <form hx-post="/integrity/confirm" hx-target="#integrity-area" hx-swap="innerHTML" style="display:inline;">
+        <input type="hidden" name="source_path" value="{{ source_path }}">
+        <input type="hidden" name="target_path" value="{{ target_path }}">
+        <input type="hidden" name="action" value="{{ action }}">
+        {% if action == "complete" %}
+            <button type="submit" class="btn-complete">Confirm — Add Link</button>
+        {% else %}
+            <button type="submit" class="btn-remove">Confirm — Remove Link</button>
+        {% endif %}
+    </form>
+    <form hx-get="/integrity/next-pair" hx-target="#integrity-area" hx-swap="innerHTML" style="display:inline;">
+        <button type="submit" class="secondary outline">Back</button>
+    </form>
+</div>

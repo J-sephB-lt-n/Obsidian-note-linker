@@ -1,14 +1,15 @@
 """Link builder — format Obsidian links and modify note content.
 
 Provides pure functions for building the ``## Related`` section:
-formatting individual links, inserting links into existing note content
-(creating or appending the section), and computing diffs for preview.
+formatting individual links, inserting/removing links in existing note
+content (creating or appending the section), and computing diffs for
+preview.
 """
 
 import difflib
 import re
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from obsidian_note_linker.domain.related_section_parser import parse_related_links
 
@@ -66,6 +67,72 @@ def insert_links_into_content(content: str, links: list[str]) -> str:
         return _append_to_existing_section(content, related_match, new_links_block)
     else:
         return _create_new_section(content, new_links_block)
+
+
+def remove_link_from_content(content: str, target_path: Path) -> str:
+    """Remove a specific link from the ``## Related`` section.
+
+    If the target link is the last remaining link in the section, the
+    entire ``## Related`` heading and its content are removed.
+
+    Args:
+        content: Raw markdown content of the note.
+        target_path: Relative path of the note whose link should be
+            removed (decoded, e.g. ``Path("My Note.md")``).
+
+    Returns:
+        Modified content with the link removed, or unchanged content
+        if the link was not found.
+    """
+    related_match = re.search(r"^## Related\s*$", content, flags=re.MULTILINE)
+    if not related_match:
+        return content
+
+    section_start = related_match.end()
+    next_heading = re.search(r"^## ", content[section_start:], flags=re.MULTILINE)
+
+    if next_heading:
+        section_text = content[section_start : section_start + next_heading.start()]
+    else:
+        section_text = content[section_start:]
+
+    # Find and remove the matching link line
+    link_pattern = re.compile(r"- \[.*?\]\(<(.+?)>\)\n?")
+    target_str = str(target_path)
+    new_section_lines: list[str] = []
+    found = False
+
+    for match in link_pattern.finditer(section_text):
+        link_path = unquote(match.group(1))
+        if link_path == target_str:
+            found = True
+        else:
+            new_section_lines.append(match.group(0))
+
+    if not found:
+        return content
+
+    if not new_section_lines:
+        # All links removed — remove the entire ## Related section
+        before = content[: related_match.start()].rstrip("\n")
+        if next_heading:
+            after = "\n\n" + content[section_start + next_heading.start() :]
+        else:
+            after = "\n"
+        return before + after
+
+    # Rebuild the section with remaining links
+    rebuilt_section = "\n" + "".join(
+        line if line.endswith("\n") else line + "\n"
+        for line in new_section_lines
+    )
+
+    before = content[: related_match.end()]
+    if next_heading:
+        after = content[section_start + next_heading.start() :]
+        return before + rebuilt_section + "\n" + after
+    else:
+        return before + rebuilt_section
 
 
 def compute_content_diff(original: str, modified: str, filename: str) -> str:

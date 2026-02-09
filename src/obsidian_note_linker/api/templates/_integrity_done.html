@@ -1,0 +1,18 @@
+<article>
+    {% if error %}
+        <header><strong>Error</strong></header>
+        <p>{{ error }}</p>
+        <footer>
+            <a href="/integrity" role="button" class="secondary">Back to Integrity</a>
+        </footer>
+    {% else %}
+        <header><strong>All Resolved</strong></header>
+        <p>All incomplete links have been resolved.</p>
+        <footer>
+            <div style="display: flex; gap: 1rem; justify-content: center;">
+                <a href="/" role="button">Back to Dashboard</a>
+                <a href="/review" role="button" class="secondary">Review Candidates</a>
+            </div>
+        </footer>
+    {% endif %}
+</article>

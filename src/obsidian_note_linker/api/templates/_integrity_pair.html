@@ -1,0 +1,47 @@
+<article>
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>Incomplete Link: {{ source_title }} → {{ target_title }}</strong>
+            <small>{{ remaining }} remaining</small>
+        </div>
+    </header>
+</article>
+
+<div class="explanation-box">
+    <small><strong>{{ source_title }}</strong> links to <strong>{{ target_title }}</strong> in its <code>## Related</code> section, but <strong>{{ target_title }}</strong> does not link back.</small>
+</div>
+
+<div class="grid">
+    <article>
+        <header><strong>{{ source_title }}</strong> <small style="opacity:0.6;">{{ source_path }}</small>
+        <br><small>Has the link</small></header>
+        <div class="note-panel">{{ source_html | safe }}</div>
+    </article>
+
+    <article>
+        <header><strong>{{ target_title }}</strong> <small style="opacity:0.6;">{{ target_path }}</small>
+        <br><small>Missing reverse link</small></header>
+        <div class="note-panel">{{ target_html | safe }}</div>
+    </article>
+</div>
+
+<div class="integrity-bar">
+    <form hx-post="/integrity/resolve" hx-target="#integrity-area" hx-swap="innerHTML" style="display:inline;">
+        <input type="hidden" name="source_path" value="{{ source_path }}">
+        <input type="hidden" name="target_path" value="{{ target_path }}">
+        <input type="hidden" name="action" value="complete">
+        <button type="submit" class="btn-complete">Complete Link</button>
+    </form>
+    <form hx-post="/integrity/resolve" hx-target="#integrity-area" hx-swap="innerHTML" style="display:inline;">
+        <input type="hidden" name="source_path" value="{{ source_path }}">
+        <input type="hidden" name="target_path" value="{{ target_path }}">
+        <input type="hidden" name="action" value="remove">
+        <button type="submit" class="btn-remove">Remove Link</button>
+    </form>
+</div>
+
+<div style="text-align: center; margin-top: 0.5rem;">
+    <a href="/integrity" role="button" class="outline secondary" style="display: inline-block;">
+        Back to Integrity Overview
+    </a>
+</div>

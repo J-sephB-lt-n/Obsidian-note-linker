@@ -6,6 +6,7 @@ from obsidian_note_linker.domain.link_builder import (
     compute_content_diff,
     format_obsidian_link,
     insert_links_into_content,
+    remove_link_from_content,
 )
 
 
@@ -167,3 +168,107 @@ class TestComputeContentDiff:
         )
         # Context lines should be present
         assert "line 3" in diff
+
+
+class TestRemoveLinkFromContent:
+    """Tests for removing a specific link from the ## Related section."""
+
+    def test_removes_target_link(self) -> None:
+        content = (
+            "# Note\n\nContent.\n\n"
+            "## Related\n\n"
+            "- [Alpha](<Alpha.md>)\n"
+            "- [Beta](<Beta.md>)\n"
+        )
+        result = remove_link_from_content(
+            content=content, target_path=Path("Alpha.md"),
+        )
+        assert "- [Alpha](<Alpha.md>)" not in result
+        assert "- [Beta](<Beta.md>)" in result
+
+    def test_removes_section_when_last_link_removed(self) -> None:
+        """Removing the only link should also remove the ## Related heading."""
+        content = (
+            "# Note\n\nContent.\n\n"
+            "## Related\n\n"
+            "- [Only](<Only.md>)\n"
+        )
+        result = remove_link_from_content(
+            content=content, target_path=Path("Only.md"),
+        )
+        assert "## Related" not in result
+        assert "Content." in result
+
+    def test_returns_unchanged_if_link_not_found(self) -> None:
+        content = (
+            "## Related\n\n"
+            "- [A](<A.md>)\n"
+        )
+        result = remove_link_from_content(
+            content=content, target_path=Path("B.md"),
+        )
+        assert result == content
+
+    def test_returns_unchanged_if_no_related_section(self) -> None:
+        content = "# Note\n\nJust content.\n"
+        result = remove_link_from_content(
+            content=content, target_path=Path("A.md"),
+        )
+        assert result == content
+
+    def test_handles_percent_encoded_link(self) -> None:
+        content = (
+            "## Related\n\n"
+            "- [My Note](<My%20Note.md>)\n"
+            "- [Other](<Other.md>)\n"
+        )
+        result = remove_link_from_content(
+            content=content, target_path=Path("My Note.md"),
+        )
+        assert "My Note" not in result
+        assert "- [Other](<Other.md>)" in result
+
+    def test_handles_subdirectory_target(self) -> None:
+        content = (
+            "## Related\n\n"
+            "- [Sub](<sub/note.md>)\n"
+            "- [Root](<root.md>)\n"
+        )
+        result = remove_link_from_content(
+            content=content, target_path=Path("sub/note.md"),
+        )
+        assert "sub/note.md" not in result
+        assert "- [Root](<root.md>)" in result
+
+    def test_preserves_content_before_and_after_section(self) -> None:
+        content = (
+            "# Title\n\nParagraph.\n\n"
+            "## Related\n\n"
+            "- [A](<A.md>)\n"
+            "- [B](<B.md>)\n\n"
+            "## References\n\nRef content.\n"
+        )
+        result = remove_link_from_content(
+            content=content, target_path=Path("A.md"),
+        )
+        assert "# Title" in result
+        assert "Paragraph." in result
+        assert "## References" in result
+        assert "Ref content." in result
+        assert "- [B](<B.md>)" in result
+        assert "- [A](<A.md>)" not in result
+
+    def test_removes_section_heading_preserves_next_heading(self) -> None:
+        """When last link removed, ## Related heading goes but next heading stays."""
+        content = (
+            "# Title\n\nContent.\n\n"
+            "## Related\n\n"
+            "- [Only](<Only.md>)\n\n"
+            "## References\n\nSome refs.\n"
+        )
+        result = remove_link_from_content(
+            content=content, target_path=Path("Only.md"),
+        )
+        assert "## Related" not in result
+        assert "## References" in result
+        assert "Some refs." in result

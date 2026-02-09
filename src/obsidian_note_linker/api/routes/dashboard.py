@@ -47,6 +47,10 @@ def dashboard(request: Request) -> Response:
         except Exception:
             logger.exception("Failed to get pending links count")
 
+    incomplete_link_count: int | None = getattr(
+        request.app.state, "incomplete_link_count", None,
+    )
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -56,5 +60,6 @@ def dashboard(request: Request) -> Response:
             "is_indexing": getattr(request.app.state, "is_indexing", False),
             "candidate_count": candidate_count,
             "pending_links_count": pending_links_count,
+            "incomplete_link_count": incomplete_link_count,
         },
     )

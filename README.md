@@ -47,11 +47,12 @@ src/obsidian_note_linker/
 │   ├── candidate.py         # CandidatePair model with scores and explanation
 │   ├── config.py            # AppConfig model, path constants
 │   ├── embedding_provider.py # EmbeddingProvider Protocol (swappable interface)
-│   ├── link_builder.py      # Obsidian link formatting, content insertion, diffs
+│   ├── link_builder.py      # Obsidian link formatting, content insertion/removal, diffs
 │   ├── markdown_stripper.py # Strip markdown formatting for embedding
 │   ├── note.py              # Note model, SHA256 content hashing
 │   ├── ranking.py           # RRF score computation, score-to-rank conversion
-│   └── related_section_parser.py # Parse ## Related section links
+│   ├── related_section_parser.py # Parse ## Related section links + detect incomplete links
+│   └── progress.py          # ProgressUpdate model for streaming progress
 ├── infrastructure/          # I/O, external libraries, persistence
 │   ├── audit_store.py       # Audit log CRUD (file modification tracking)
 │   ├── bm25_index.py        # BM25 lexical index (bm25s wrapper)
@@ -72,6 +73,7 @@ src/obsidian_note_linker/
 │   ├── candidate_service.py # Hybrid candidate generation (RRF + filtering)
 │   ├── config_service.py    # Vault path validation and persistence
 │   ├── indexing_service.py  # Incremental note indexing + embedding
+│   ├── integrity_service.py # Incomplete link detection + resolution
 │   ├── link_service.py      # Safe bidirectional link application
 │   ├── review_service.py    # Human-in-the-loop review orchestration
 │   └── vault_init.py        # DB + logging initialisation for a vault
@@ -79,8 +81,9 @@ src/obsidian_note_linker/
 │   ├── app.py               # FastAPI application factory
 │   ├── routes/
 │   │   ├── apply.py         # Safe link application (diff preview, confirm/skip)
-│   │   ├── dashboard.py     # Dashboard page with indexing + candidate + pending status
-│   │   ├── indexing.py      # SSE indexing + candidate generation stream
+│   │   ├── dashboard.py     # Dashboard page with indexing + candidate + pending + integrity status
+│   │   ├── indexing.py      # SSE indexing + candidate generation + integrity detection stream
+│   │   ├── integrity.py     # Incomplete link resolution (complete/remove with diff preview)
 │   │   ├── review.py        # Human-in-the-loop review (target selection, decisions)
 │   │   ├── search.py        # Document search (placeholder for Slice 7)
 │   │   └── settings.py      # Setup + settings pages

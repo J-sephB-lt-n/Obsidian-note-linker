@@ -175,3 +175,33 @@ All progress bars during indexing showed indeterminate animation (repeated pulsi
 - 6 file writer tests: writes content, creates file, preserves on failure, no temp files left, UTF-8, nested path.
 - 14 link service tests: get pending pairs, preview diffs (both notes, link content, already exists, titles), apply (writes files, creates section, marks applied, audit entries, no duplicates, no-op skips write, spaces in paths, missing file).
 - 15 apply route tests: page states (configured, no pending, count, start button), next pair (diff preview, titles, done), confirm (applies + shows next, writes to disk, done after last), skip (doesn't apply), nav link, dashboard pending links card (count, zero, link to apply).
+
+## Slice 6 — Link Integrity (2026-02-09)
+
+### What was built
+- **Domain**: `IncompleteLink` frozen dataclass in `related_section_parser.py` — represents a one-directional link where source links to target but target doesn't link back. `get_incomplete_link_pairs()` function detects all such pairs from a notes dict, excluding links to non-existent notes, returning results sorted by (source, target). `remove_link_from_content()` in `link_builder.py` — removes a specific link from a `## Related` section, removing the entire section heading if it becomes empty.
+- **Services**: `IntegrityService` in `integrity_service.py` — orchestrates resolution of incomplete links. `preview_complete()` and `preview_remove()` generate `ResolutionPreview` dataclasses with unified diffs. `apply_complete()` adds the missing reverse link to the target note. `apply_remove()` deletes the one-way link from the source note. Both apply methods use atomic writes and create audit entries (`COMPLETE_LINK` / `REMOVE_LINK`). Standalone `detect_incomplete_links(vault_path)` function scans the vault and returns all incomplete links.
+- **API**: Integrity routes (`/integrity`, `/integrity/next-pair`, `/integrity/resolve`, `/integrity/confirm`). Templates: `integrity.html` (landing page with count and "Begin" button), `_integrity_pair.html` (side-by-side rendered markdown with Complete/Remove buttons and explanation), `_integrity_preview.html` (diff preview with syntax-coloured unified diff and Confirm button), `_integrity_done.html` (completion/error partial). "Integrity" added to nav bar in `base.html`. "Incomplete Links" card added to dashboard with live count.
+- **Indexing integration**: Incomplete link detection runs as a new phase after candidate generation during the indexing SSE stream. Results stored in `app.state.incomplete_links` and `app.state.incomplete_link_count`. Progress events streamed with phase name "integrity". Completion summary includes incomplete link count.
+
+### Key design decisions
+- **Detection after indexing** — incomplete links are detected by scanning the vault during the indexing pipeline, stored in `app.state`. Like candidates, the count is `None` (greyed-out dash on dashboard) until indexing has been run. This avoids stale data since the vault is freshly scanned.
+- **Two-step resolution UX** — pair-by-pair flow where the user first sees both notes side-by-side (rendered markdown) to inform their decision, then chooses Complete or Remove, sees a diff preview, and confirms. This mirrors the Apply flow but with an extra choice step.
+- **No "ignore" option** — per FR6.3, all incomplete links must be resolved by either completing or removing. There is no skip/ignore option.
+- **Single-note modification per action** — completing modifies only the target note (adds reverse link), removing modifies only the source note (deletes one-way link). This simplifies the diff preview and audit trail.
+- **`IncompleteLink` in domain layer** — placed in `related_section_parser.py` alongside the detection logic since it's a pure domain concept derived from note content parsing.
+- **`remove_link_from_content()` removes empty sections** — if removing the last link from a `## Related` section, the heading itself is also removed to avoid leaving empty sections.
+- **Resolved links removed from `app.state`** — after confirming a resolution, the link is removed from the in-memory list and count is updated. This provides instant feedback without requiring re-indexing.
+
+### Test suite
+- 423 tests across all layers. All pass. `ruff check` and `ty check` clean.
+- 10 domain tests for `get_incomplete_link_pairs`: one-directional detection, bidirectional exclusion, empty notes, non-existent targets, multiple incomplete, mixed complete/incomplete, sorting, percent-encoded paths, subdirectories.
+- 8 domain tests for `remove_link_from_content`: removes target link, removes section when empty, unchanged if not found, unchanged if no section, percent-encoded, subdirectory, preserves surrounding content, preserves next heading.
+- 18 service tests: detection (4), preview complete (3), preview remove (2), apply complete (4), apply remove (5).
+- 24 route tests: integrity page (5 states), next pair (4), resolve (3 diff previews), confirm (6 including disk writes, state updates, audit entries), navigation (1), dashboard card (5).
+- 4 indexing integration tests: stores count in app state, completion summary mentions incomplete links, integrity progress events in stream, detects actual incomplete links in vault.
+
+### Known limitations / future work
+- No file-based logging yet (console only).
+- BM25 index is rebuilt from scratch on each indexing run (not incremental).
+- Candidate pairs and incomplete links stored in-memory only — lost on app restart, must re-index.

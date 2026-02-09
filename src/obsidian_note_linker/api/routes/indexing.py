@@ -18,6 +18,7 @@ from obsidian_note_linker.services.indexing_service import (
     IndexingResult,
     IndexingService,
 )
+from obsidian_note_linker.services.integrity_service import detect_incomplete_links
 
 _T = TypeVar("_T")
 _EXHAUSTED = object()
@@ -132,12 +133,40 @@ async def indexing_stream(request: Request) -> StreamingResponse:
             candidate_count = candidates
             request.app.state.candidate_count = candidate_count
 
+            # --- Detect incomplete links after candidate generation ---
+            yield _format_sse(
+                "progress",
+                _render_progress(ProgressUpdate(
+                    phase="integrity",
+                    current=0,
+                    total=1,
+                    message="Checking link integrity...",
+                )),
+            )
+
+            incomplete_links = await asyncio.to_thread(
+                detect_incomplete_links, config.vault_path,
+            )
+            request.app.state.incomplete_links = incomplete_links
+            request.app.state.incomplete_link_count = len(incomplete_links)
+
+            yield _format_sse(
+                "progress",
+                _render_progress(ProgressUpdate(
+                    phase="integrity",
+                    current=1,
+                    total=1,
+                    message=f"Found {len(incomplete_links)} incomplete link{'s' if len(incomplete_links) != 1 else ''}",
+                )),
+            )
+
             assert indexing_result is not None, "Indexing should have produced a result"
             yield _format_sse(
                 "complete",
                 _render_complete(
                     result=indexing_result,
                     candidate_count=candidate_count,
+                    incomplete_link_count=len(incomplete_links),
                 ),
             )
 
@@ -202,8 +231,13 @@ def _render_progress(progress: ProgressUpdate) -> str:
     return f"<progress></progress><p><small>{phase}</small></p><p>{message}</p>"
 
 
-def _render_complete(result: IndexingResult, candidate_count: int) -> str:
+def _render_complete(
+    result: IndexingResult,
+    candidate_count: int,
+    incomplete_link_count: int = 0,
+) -> str:
     """Render the completion summary as an HTML fragment."""
+    integrity_line = f"<p>Incomplete links: {incomplete_link_count}</p>"
     return (
         "<article>"
         "<header><strong>Indexing Complete</strong></header>"
@@ -215,6 +249,7 @@ def _render_complete(result: IndexingResult, candidate_count: int) -> str:
         f"Cached: {result.embeddings_cached}</p>"
         f"<p><strong>Total notes indexed: {result.total_notes_indexed}</strong></p>"
         f"<p>Candidates found: {candidate_count}</p>"
+        f"{integrity_line}"
         '<footer><a href="/" role="button">Back to Dashboard</a></footer>'
         "</article>"
     )

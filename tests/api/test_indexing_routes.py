@@ -39,6 +39,34 @@ def vault_with_notes(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def vault_with_incomplete_links(tmp_path: Path) -> Path:
+    """Create a vault with an incomplete bidirectional link."""
+    vault = tmp_path / "vault_incomplete"
+    vault.mkdir()
+    (vault / "a.md").write_text(
+        "# A\n\nContent.\n\n## Related\n\n- [B](<b.md>)\n",
+        encoding="utf-8",
+    )
+    (vault / "b.md").write_text("# B\n\nNo related section.\n", encoding="utf-8")
+    return vault
+
+
+@pytest.fixture
+def client_with_incomplete(
+    tmp_path: Path,
+    vault_with_incomplete_links: Path,
+) -> TestClient:
+    """Test client with a vault containing incomplete links."""
+    config_path = tmp_path / "config_incomplete" / "config.json"
+    svc = ConfigService(config_path=config_path)
+    svc.save_vault_path(vault_path=vault_with_incomplete_links)
+
+    app = create_app(config_path=config_path)
+    app.state.embedding_provider = _FakeEmbeddingProvider()
+    return TestClient(app, follow_redirects=False)
+
+
+@pytest.fixture
 def client_with_notes(
     tmp_path: Path,
     vault_with_notes: Path,
@@ -198,3 +226,47 @@ class TestIndexingStream:
         assert 'value="' in body, (
             "Should contain at least one determinate progress bar"
         )
+
+    def test_detects_incomplete_links_after_indexing(
+        self, client_with_notes: TestClient,
+    ) -> None:
+        """Indexing should detect incomplete links and store them in app state."""
+        client_with_notes.get("/indexing/stream")
+
+        count = client_with_notes.app.state.incomplete_link_count  # type: ignore[union-attr]
+        assert isinstance(count, int)
+        assert count >= 0
+
+    def test_incomplete_links_shown_in_completion_summary(
+        self, client_with_notes: TestClient,
+    ) -> None:
+        """Completion summary should mention incomplete links."""
+        response = client_with_notes.get("/indexing/stream")
+        body = response.text
+
+        assert "Incomplete links:" in body
+
+    def test_integrity_progress_events_in_stream(
+        self, client_with_notes: TestClient,
+    ) -> None:
+        """SSE stream should include integrity check progress events."""
+        response = client_with_notes.get("/indexing/stream")
+        body = response.text
+
+        assert "integrity" in body.lower(), (
+            "Should contain integrity check progress events"
+        )
+
+    def test_detects_actual_incomplete_links(
+        self, client_with_incomplete: TestClient,
+    ) -> None:
+        """A vault with one-directional links should report incomplete links."""
+        client_with_incomplete.get("/indexing/stream")
+
+        count = client_with_incomplete.app.state.incomplete_link_count  # type: ignore[union-attr]
+        assert count == 1
+
+        links = client_with_incomplete.app.state.incomplete_links  # type: ignore[union-attr]
+        assert len(links) == 1
+        assert links[0].source_path == Path("a.md")
+        assert links[0].target_path == Path("b.md")

@@ -32,7 +32,7 @@ def create_app(config_path: Path | None = None) -> FastAPI:
     # Avoid circular import — routes import at function scope is intentional
     # because settings.py references initialize_vault_state from vault_init
     # (not from this module), so there is no true circular dependency.
-    from obsidian_note_linker.api.routes import apply, dashboard, indexing, review, search, settings  # noqa: E402
+    from obsidian_note_linker.api.routes import apply, dashboard, indexing, integrity, review, search, settings  # noqa: E402
 
     app = FastAPI(title="Obsidian Note Linker")
 
@@ -44,6 +44,8 @@ def create_app(config_path: Path | None = None) -> FastAPI:
     app.state.is_indexing = False
     app.state.candidate_count = None
     app.state.candidates = None
+    app.state.incomplete_links = None
+    app.state.incomplete_link_count = None
 
     # Load existing config and initialise vault state
     config = app.state.config_service.load_config()
@@ -75,6 +77,7 @@ def create_app(config_path: Path | None = None) -> FastAPI:
     app.include_router(indexing.router)
     app.include_router(review.router)
     app.include_router(apply.router)
+    app.include_router(integrity.router)
     app.include_router(search.router)
 
     logger.info("Application created")

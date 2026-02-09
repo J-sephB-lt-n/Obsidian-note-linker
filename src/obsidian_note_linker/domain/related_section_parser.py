@@ -1,11 +1,12 @@
 """Parser for ``## Related`` sections in Obsidian markdown notes.
 
 Extracts links from the ``## Related`` section to detect which note
-pairs are already linked, enabling the candidate generation pipeline
-to exclude them (FR1.6).
+pairs are already linked (FR1.6) and to identify incomplete
+bidirectional links for integrity checking (FR6).
 """
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -78,3 +79,58 @@ def get_existing_link_pairs(
                 pairs.add(pair)  # type: ignore[arg-type]
 
     return pairs
+
+
+@dataclass(frozen=True)
+class IncompleteLink:
+    """A one-directional link that should be bidirectional.
+
+    ``source_path`` has a link to ``target_path`` in its ``## Related``
+    section, but ``target_path`` does **not** link back.
+
+    Attributes:
+        source_path: Note that contains the link.
+        target_path: Note that is linked to but does not reciprocate.
+    """
+
+    source_path: Path
+    target_path: Path
+
+
+def get_incomplete_link_pairs(
+    notes: dict[Path, str],
+) -> list[IncompleteLink]:
+    """Identify one-directional links in ``## Related`` sections.
+
+    An incomplete link exists when note A links to note B in its
+    ``## Related`` section but note B does **not** link back to A.
+    Only links whose targets exist in the provided ``notes`` dict
+    are considered (links to non-existent notes are ignored).
+
+    Args:
+        notes: Mapping of note relative path → raw markdown content.
+
+    Returns:
+        List of ``IncompleteLink`` instances sorted by
+        ``(source_path, target_path)``.
+    """
+    link_map: dict[Path, set[Path]] = {}
+    for note_path, content in notes.items():
+        linked = parse_related_links(content)
+        if linked:
+            link_map[note_path] = set(linked)
+
+    incomplete: list[IncompleteLink] = []
+    for source, targets in link_map.items():
+        for target in targets:
+            if target not in notes:
+                continue
+            reverse_links = link_map.get(target, set())
+            if source not in reverse_links:
+                incomplete.append(IncompleteLink(
+                    source_path=source,
+                    target_path=target,
+                ))
+
+    incomplete.sort(key=lambda il: (il.source_path, il.target_path))
+    return incomplete

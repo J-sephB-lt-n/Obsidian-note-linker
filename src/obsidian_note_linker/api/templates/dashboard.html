@@ -56,6 +56,28 @@
     </article>
 
     <article>
+        <header><strong>Incomplete Links</strong></header>
+        <p style="font-size: 2rem; text-align: center;">
+            {% if incomplete_link_count is not none %}
+                {{ incomplete_link_count }}
+            {% else %}
+                <span style="opacity: 0.4;">&mdash;</span>
+            {% endif %}
+        </p>
+        <footer>
+            <small>
+                {% if incomplete_link_count is not none and incomplete_link_count > 0 %}
+                    <a href="/integrity">Resolve incomplete links</a>
+                {% elif incomplete_link_count is not none %}
+                    All links are complete
+                {% else %}
+                    Run indexing to detect
+                {% endif %}
+            </small>
+        </footer>
+    </article>
+
+    <article>
         <header><strong>Pending Links</strong></header>
         <p style="font-size: 2rem; text-align: center;">
             {{ pending_links_count }}
