@@ -303,15 +303,15 @@ class TestDecide:
         assert "Complete" in response.text or "reviewed" in response.text.lower()
 
 
-class TestSearchPlaceholder:
-    """Tests for the search placeholder page."""
+class TestSearchPage:
+    """Tests for the search page."""
 
-    def test_search_page_shows_coming_soon(
+    def test_search_page_renders_search_form(
         self, client_with_config: TestClient,
     ) -> None:
         response = client_with_config.get("/search")
         assert response.status_code == 200
-        assert "Coming Soon" in response.text
+        assert 'name="q"' in response.text
 
 
 class TestNavigation:

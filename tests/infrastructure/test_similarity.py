@@ -4,6 +4,7 @@ import pytest
 
 from obsidian_note_linker.infrastructure.similarity import (
     compute_pairwise_cosine_similarity,
+    compute_query_cosine_similarity,
 )
 
 
@@ -64,3 +65,46 @@ class TestComputePairwiseCosineSimilarity:
         for row in matrix:
             for val in row:
                 assert -1.0 - 1e-6 <= val <= 1.0 + 1e-6
+
+
+class TestComputeQueryCosineSimilarity:
+    """Tests for the single-query cosine similarity function."""
+
+    def test_identical_query_and_corpus(self) -> None:
+        query = [1.0, 0.0, 0.0]
+        corpus = [[1.0, 0.0, 0.0]]
+        scores = compute_query_cosine_similarity(query, corpus)
+        assert scores[0] == pytest.approx(1.0, abs=1e-6)
+
+    def test_orthogonal_query(self) -> None:
+        query = [1.0, 0.0]
+        corpus = [[0.0, 1.0]]
+        scores = compute_query_cosine_similarity(query, corpus)
+        assert scores[0] == pytest.approx(0.0, abs=1e-6)
+
+    def test_multiple_corpus_vectors(self) -> None:
+        query = [1.0, 0.0]
+        corpus = [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]
+        scores = compute_query_cosine_similarity(query, corpus)
+        assert len(scores) == 3
+        assert scores[0] == pytest.approx(1.0, abs=1e-6)  # identical
+        assert scores[1] == pytest.approx(0.0, abs=1e-6)  # orthogonal
+
+    def test_scores_in_valid_range(self) -> None:
+        query = [1.0, -2.0, 3.0]
+        corpus = [[-1.0, 2.0, -3.0], [0.5, 0.5, 0.5], [3.0, 1.0, 0.0]]
+        scores = compute_query_cosine_similarity(query, corpus)
+        for score in scores:
+            assert -1.0 - 1e-6 <= score <= 1.0 + 1e-6
+
+    def test_known_similarity(self) -> None:
+        """Verify against manually computed cosine similarity."""
+        query = [3.0, 4.0]
+        corpus = [[4.0, 3.0]]
+        # cos(q, c) = (12 + 12) / (5 * 5) = 24/25 = 0.96
+        scores = compute_query_cosine_similarity(query, corpus)
+        assert scores[0] == pytest.approx(0.96, abs=1e-6)
+
+    def test_empty_corpus_raises(self) -> None:
+        with pytest.raises(ValueError, match="at least one"):
+            compute_query_cosine_similarity([1.0, 0.0], [])

@@ -205,3 +205,37 @@ All progress bars during indexing showed indeterminate animation (repeated pulsi
 - No file-based logging yet (console only).
 - BM25 index is rebuilt from scratch on each indexing run (not incremental).
 - Candidate pairs and incomplete links stored in-memory only — lost on app restart, must re-index.
+
+## Slice 7 — Document Search (2026-02-09)
+
+### What was built
+- **Domain**: `SearchMode` enum (FTS, SEMANTIC, HYBRID) and `SearchResult` frozen dataclass in `domain/search.py`. `generate_snippet()` utility that strips markdown and truncates at word boundaries with ellipsis.
+- **Infrastructure**: `BM25Index.query()` method for single-query retrieval (top-k results with scores). `BM25Index.query_all_scores()` for full-corpus scoring (needed for hybrid RRF combination). `compute_query_cosine_similarity()` in `similarity.py` for computing cosine similarity between a single query embedding and all corpus embeddings.
+- **Services**: `SearchService` orchestrating all three search modes — FTS (BM25 lexical), semantic (embedding cosine similarity), and hybrid (RRF fusion of both). Includes `check_readiness()` for FR7.9 index status warnings. BM25 index built lazily from vault notes on each search (not cached in `app.state` — decoupled from indexing pipeline). `_CorpusEntry` internal model and `_display_title()` utility for filename-to-title conversion.
+- **API**: Three routes — `GET /search` (full page with query input and mode selector), `GET /search/results` (HTMX partial for results list), `GET /search/note` (HTMX partial for inline note expansion). Mode defaults to Hybrid per FR7.5.
+- **Templates**: `search.html` (full page with search form, radio-button mode selector, HTMX results area), `_search_results.html` (results partial with title, score, snippet, view button; warning display; zero-results handling), `_search_note.html` (inline expanded note with rendered markdown, scrollable content, close button).
+
+### Key design decisions
+- **BM25 index built per-search, not cached in `app.state`** — decouples search from the indexing pipeline. Search works after app restart as long as notes are indexed in DB (just reads vault files to build BM25). For ~200 notes, BM25 build is <100ms so this is fine for NFR2.4 (<1 second response).
+- **Separate `query()` and `query_all_scores()` on BM25Index** — `query()` returns sorted top-k results (used by FTS mode), `query_all_scores()` returns scores in corpus order for all documents (needed by hybrid mode to convert to ranks for RRF).
+- **`compute_query_cosine_similarity()` in infrastructure** — numpy-based, mirrors the pairwise function but for a single query vector against a corpus. Returns scores in corpus order for rank conversion.
+- **Hybrid search uses same RRF approach as candidate generation** — `ranks_from_scores()` converts BM25 and semantic scores to 1-based dense ranks, then `compute_rrf_score()` combines them. Consistent algorithm across the application.
+- **Inline note expansion using `<details>` + HTMX** — user clicks "View full note" to expand the result in-place. HTMX loads rendered content lazily on first click (`hx-trigger="click once"`). Close button collapses the `<details>` element. Stays on the search page for easy multi-result browsing.
+- **Zero-score results excluded from FTS** — BM25 returns 0.0 for documents with no matching terms. These are filtered out to avoid showing irrelevant results.
+- **Warning system for FR7.9** — `SearchService.check_readiness()` checks for: no indexed notes, no embeddings, or missing embedding provider. Returns a human-readable warning message that the route renders in the results area.
+- **`_display_title()` converts filename stems to titles** — replaces hyphens/underscores with spaces and applies title-casing (e.g. `"machine-learning"` → `"Machine Learning"`).
+- **Old placeholder test updated** — `TestSearchPlaceholder.test_search_page_shows_coming_soon` replaced with `TestSearchPage.test_search_page_renders_search_form` since the page is now fully implemented.
+
+### Test suite
+- 501 tests across all layers. All pass. `ruff check` and `ty check` clean.
+- 14 domain tests: SearchMode enum values and string conversion, SearchResult creation and immutability, snippet generation (short content, truncation, word boundaries, markdown stripping, frontmatter, empty, default length, exact boundary).
+- 9 BM25 query tests: returns results, index-score tuples, relevant doc first, non-negative scores, top-k limiting, top-k larger than corpus, sorted by score, query_all_scores count, query_all_scores relevance.
+- 6 similarity query tests: identical vectors, orthogonal, multiple corpus, valid range, known value, empty corpus.
+- 28 search service tests: FTS (10 — returns results, types, relevance ranking, scores, sorting, snippets, titles, no provider needed, top-k, zero-score exclusion), semantic (4 — returns results, sorting, requires provider, top-k), hybrid (4 — returns results, sorting, requires provider, top-k), edge cases (10 — empty query, whitespace, no indexed notes, readiness checks for all modes with/without provider, relative paths, subdirectories).
+- 21 search route tests: search page (5 — renders, query input, mode selector, default hybrid, navigation), search results (12 — FTS/semantic/hybrid, title/score/snippet/count, empty query, no matches, index warning, provider warning, view button), note view (4 — renders content, title, not found, close mechanism).
+
+### Known limitations / future work
+- No file-based logging yet (console only).
+- BM25 index is rebuilt from scratch on each search (not cached). For current vault size (~200 notes) this is fine, but for larger vaults a cached index would improve performance.
+- Candidate pairs and incomplete links stored in-memory only — lost on app restart, must re-index.
+- Snippet is always the first ~200 characters of stripped content — could be improved to show the most relevant passage matching the query.

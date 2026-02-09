@@ -57,3 +57,75 @@ class TestBM25Index:
     def test_empty_raises(self) -> None:
         with pytest.raises(ValueError, match="at least one"):
             BM25Index([])
+
+
+class TestBM25IndexQuery:
+    """Tests for the BM25Index.query() method."""
+
+    def test_query_returns_results(self) -> None:
+        texts = ["the cat sat on the mat", "the dog played in the park"]
+        index = BM25Index(texts)
+        results = index.query(query_text="cat mat", top_k=2)
+        assert len(results) == 2
+
+    def test_query_returns_tuples_of_index_and_score(self) -> None:
+        texts = ["alpha beta", "gamma delta"]
+        index = BM25Index(texts)
+        results = index.query(query_text="alpha", top_k=2)
+        for doc_idx, score in results:
+            assert isinstance(doc_idx, int)
+            assert isinstance(score, float)
+
+    def test_query_ranks_relevant_doc_first(self) -> None:
+        texts = [
+            "machine learning neural networks",
+            "cooking recipes italian pasta",
+            "deep learning artificial intelligence",
+        ]
+        index = BM25Index(texts)
+        results = index.query(query_text="machine learning", top_k=3)
+        # Document 0 should be ranked highest (most relevant)
+        assert results[0][0] == 0, "Most relevant doc should be first"
+
+    def test_query_scores_are_non_negative(self) -> None:
+        texts = ["hello world", "foo bar", "hello foo"]
+        index = BM25Index(texts)
+        results = index.query(query_text="hello", top_k=3)
+        for _, score in results:
+            assert score >= 0.0, f"BM25 scores should be non-negative, got {score}"
+
+    def test_query_top_k_limits_results(self) -> None:
+        texts = ["doc one", "doc two", "doc three", "doc four"]
+        index = BM25Index(texts)
+        results = index.query(query_text="doc", top_k=2)
+        assert len(results) == 2
+
+    def test_query_top_k_larger_than_corpus(self) -> None:
+        """top_k larger than corpus returns all documents."""
+        texts = ["alpha", "beta"]
+        index = BM25Index(texts)
+        results = index.query(query_text="alpha", top_k=10)
+        assert len(results) == 2
+
+    def test_query_returns_sorted_by_score_descending(self) -> None:
+        texts = ["cat dog", "cat", "fish bird"]
+        index = BM25Index(texts)
+        results = index.query(query_text="cat dog", top_k=3)
+        scores = [score for _, score in results]
+        assert scores == sorted(scores, reverse=True), "Results should be sorted by score descending"
+
+    def test_query_all_scores_returns_all_documents(self) -> None:
+        texts = ["one two three", "four five six", "seven eight nine"]
+        index = BM25Index(texts)
+        results = index.query_all_scores(query_text="one two")
+        assert len(results) == 3, "Should return a score for every document"
+
+    def test_query_all_scores_relevant_doc_scores_highest(self) -> None:
+        texts = [
+            "machine learning algorithms",
+            "cooking pasta recipes",
+            "deep learning neural networks",
+        ]
+        index = BM25Index(texts)
+        scores = index.query_all_scores(query_text="machine learning")
+        assert scores[0] > scores[1], "Relevant doc should score higher"

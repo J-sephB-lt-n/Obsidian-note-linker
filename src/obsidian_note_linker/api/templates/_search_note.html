@@ -1,0 +1,17 @@
+<article style="margin-top: 0.5rem;">
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>{{ title }}</strong>
+            <small class="secondary">{{ relative_path }}</small>
+        </div>
+    </header>
+    <div class="note-content" style="max-height: 60vh; overflow-y: auto;">
+        {{ rendered_content | safe }}
+    </div>
+    <footer>
+        <button class="secondary outline"
+                onclick="this.closest('details').removeAttribute('open'); this.closest('details').querySelector('[id^=note-view]').innerHTML=''; return false;">
+            Close
+        </button>
+    </footer>
+</article>

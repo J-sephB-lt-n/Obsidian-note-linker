@@ -52,10 +52,11 @@ src/obsidian_note_linker/
 │   ├── note.py              # Note model, SHA256 content hashing
 │   ├── ranking.py           # RRF score computation, score-to-rank conversion
 │   ├── related_section_parser.py # Parse ## Related section links + detect incomplete links
-│   └── progress.py          # ProgressUpdate model for streaming progress
+│   ├── progress.py          # ProgressUpdate model for streaming progress
+│   └── search.py            # SearchMode enum, SearchResult model, snippet generation
 ├── infrastructure/          # I/O, external libraries, persistence
 │   ├── audit_store.py       # Audit log CRUD (file modification tracking)
-│   ├── bm25_index.py        # BM25 lexical index (bm25s wrapper)
+│   ├── bm25_index.py        # BM25 lexical index (bm25s wrapper, pairwise + query)
 │   ├── config_store.py      # Read/write ~/.config/obsidian-linker/config.json
 │   ├── database.py          # SQLite engine creation (WAL mode, migrations)
 │   ├── decision_store.py    # Decision CRUD (YES/NO with staleness + applied tracking)
@@ -67,7 +68,7 @@ src/obsidian_note_linker/
 │   ├── model2vec_provider.py # Model2Vec embedding provider (potion-retrieval-32M)
 │   ├── models.py            # SQLModel tables (NoteRecord, EmbeddingRecord, DecisionRecord, AuditRecord)
 │   ├── note_store.py        # NoteRecord CRUD
-│   ├── similarity.py        # Pairwise cosine similarity (numpy)
+│   ├── similarity.py        # Cosine similarity (pairwise + query, numpy)
 │   └── vault_scanner.py     # Scan vault for .md files (excl. .obsidian/)
 ├── services/                # Orchestrate infrastructure to fulfil use cases
 │   ├── candidate_service.py # Hybrid candidate generation (RRF + filtering)
@@ -76,6 +77,7 @@ src/obsidian_note_linker/
 │   ├── integrity_service.py # Incomplete link detection + resolution
 │   ├── link_service.py      # Safe bidirectional link application
 │   ├── review_service.py    # Human-in-the-loop review orchestration
+│   ├── search_service.py    # Document search (FTS, semantic, hybrid)
 │   └── vault_init.py        # DB + logging initialisation for a vault
 ├── api/                     # HTTP routing, templates, user interaction
 │   ├── app.py               # FastAPI application factory
@@ -85,7 +87,7 @@ src/obsidian_note_linker/
 │   │   ├── indexing.py      # SSE indexing + candidate generation + integrity detection stream
 │   │   ├── integrity.py     # Incomplete link resolution (complete/remove with diff preview)
 │   │   ├── review.py        # Human-in-the-loop review (target selection, decisions)
-│   │   ├── search.py        # Document search (placeholder for Slice 7)
+│   │   ├── search.py        # Document search (FTS, semantic, hybrid with inline note view)
 │   │   └── settings.py      # Setup + settings pages
 │   └── templates/           # Jinja2 templates (Pico.css dark mode + HTMX)
 └── __main__.py              # CLI entry point (obsidian-linker command)

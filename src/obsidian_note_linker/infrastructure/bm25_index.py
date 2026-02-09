@@ -1,8 +1,9 @@
 """BM25 lexical index wrapper using bm25s.
 
 Provides an in-memory BM25 index for computing pairwise lexical
-similarity scores between notes.  The index is rebuilt each time
-indexing is triggered (not persisted to disk).
+similarity scores between notes and single-query retrieval for
+document search.  The index is rebuilt each time indexing is
+triggered (not persisted to disk).
 """
 
 import logging
@@ -67,3 +68,54 @@ class BM25Index:
                     matrix[query_idx][doc_idx] = score
 
         return matrix
+
+    def query(self, query_text: str, top_k: int = 10) -> list[tuple[int, float]]:
+        """Retrieve the top-k documents matching a free-text query.
+
+        Args:
+            query_text: Plain-text search query.
+            top_k: Maximum number of results to return.  Clamped to
+                   the corpus size if larger.
+
+        Returns:
+            List of ``(doc_index, score)`` tuples sorted by score
+            descending.  Scores are non-negative BM25 values.
+        """
+        k = min(top_k, self._num_documents)
+        query_tokens = bm25s.tokenize([query_text], show_progress=False)
+        indices, scores = self._retriever.retrieve(
+            query_tokens, k=k, show_progress=False,
+        )
+
+        results: list[tuple[int, float]] = []
+        for rank_pos in range(k):
+            doc_idx = int(indices[0, rank_pos])
+            score = float(scores[0, rank_pos])
+            results.append((doc_idx, score))
+
+        return results
+
+    def query_all_scores(self, query_text: str) -> list[float]:
+        """Compute BM25 scores for all documents against a query.
+
+        Returns a score for every document in corpus order, suitable
+        for rank conversion and hybrid combination.
+
+        Args:
+            query_text: Plain-text search query.
+
+        Returns:
+            List of BM25 scores, one per document, in corpus order.
+        """
+        n = self._num_documents
+        query_tokens = bm25s.tokenize([query_text], show_progress=False)
+        indices, scores = self._retriever.retrieve(
+            query_tokens, k=n, show_progress=False,
+        )
+
+        result = [0.0] * n
+        for rank_pos in range(n):
+            doc_idx = int(indices[0, rank_pos])
+            result[doc_idx] = float(scores[0, rank_pos])
+
+        return result

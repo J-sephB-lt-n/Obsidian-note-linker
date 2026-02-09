@@ -1,0 +1,36 @@
+{% if warning is defined and warning %}
+<article>
+    <p>{{ warning }}</p>
+</article>
+{% elif results|length == 0 %}
+<p>0 results found</p>
+{% else %}
+<p>{{ results|length }} result{{ 's' if results|length != 1 else '' }} found</p>
+{% endif %}
+
+{% for result in results %}
+<article>
+    <header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>{{ result.title }}</strong>
+            <small>Score: {{ "%.4f"|format(result.score) }}</small>
+        </div>
+    </header>
+    <p>{{ result.snippet }}</p>
+    <footer>
+        <details>
+            <summary
+                hx-get="/search/note?path={{ result.relative_path | urlencode }}"
+                hx-target="#note-view-{{ loop.index }}"
+                hx-swap="innerHTML"
+                hx-trigger="click once"
+                role="button"
+                class="secondary outline"
+                style="display: inline-block; cursor: pointer;">
+                View full note
+            </summary>
+            <div id="note-view-{{ loop.index }}"></div>
+        </details>
+    </footer>
+</article>
+{% endfor %}

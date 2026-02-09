@@ -2,12 +2,68 @@
 
 {% block title %}Search — Obsidian Note Linker{% endblock %}
 
+{% block head %}
+<style>
+    .search-form fieldset {
+        border: none;
+        padding: 0;
+        margin: 0.5rem 0 0 0;
+    }
+    .search-form fieldset label {
+        display: inline-block;
+        margin-right: 1.5rem;
+        cursor: pointer;
+    }
+    .search-form fieldset input[type="radio"] {
+        margin-right: 0.3rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>Search</h1>
 
-<article>
-    <header><strong>Coming Soon</strong></header>
-    <p>Document search with full-text, semantic, and hybrid modes will be available in a future update.</p>
-    <footer><a href="/" role="button" class="secondary">Back to Dashboard</a></footer>
-</article>
+<form class="search-form"
+      hx-get="/search/results"
+      hx-target="#search-results"
+      hx-swap="innerHTML"
+      hx-indicator="#search-spinner">
+    <div class="grid">
+        <input type="search"
+               name="q"
+               placeholder="Search your notes..."
+               value="{{ query }}"
+               autofocus
+               aria-label="Search query">
+        <button type="submit">Search</button>
+    </div>
+    <fieldset>
+        <label>
+            <input type="radio" name="mode" value="hybrid" {{ 'checked' if mode == 'hybrid' }}>
+            Hybrid
+        </label>
+        <label>
+            <input type="radio" name="mode" value="fts" {{ 'checked' if mode == 'fts' }}>
+            Full-Text (BM25)
+        </label>
+        <label>
+            <input type="radio" name="mode" value="semantic" {{ 'checked' if mode == 'semantic' }}>
+            Semantic
+        </label>
+    </fieldset>
+</form>
+
+<span id="search-spinner" class="htmx-indicator" aria-busy="true"></span>
+
+<div id="search-results">
+    {% if warning %}
+    <article>
+        <p>{{ warning }}</p>
+    </article>
+    {% elif results is defined and results|length > 0 %}
+    {% include '_search_results.html' %}
+    {% elif query %}
+    <p>No results found for &ldquo;{{ query }}&rdquo;.</p>
+    {% endif %}
+</div>
 {% endblock %}

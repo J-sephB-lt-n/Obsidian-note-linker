@@ -61,8 +61,8 @@
     "id": "slice-7-document-search",
     "name": "Document Search",
     "description": "Dedicated search page accessible from main navigation. Free-text query input. Three search modes: FTS (BM25), Semantic (embedding cosine similarity), Hybrid (RRF). Mode selector (default: Hybrid). Ranked results with note title, relevance score, and content snippet. Click to view full rendered note. Warns if index is stale/empty. Reuses existing BM25 + embedding indexes. Covers FR7, NFR2.4.",
-    "status": "NOT_STARTED",
-    "last_updated_at": "2026-02-06T19:52:07+00:00",
+    "status": "COMPLETE",
+    "last_updated_at": "2026-02-09T07:59:54+00:00",
     "dependencies": [
       "slice-3-candidate-generation"
     ]
