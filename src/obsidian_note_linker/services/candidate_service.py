@@ -6,6 +6,7 @@ human review.  Filters out already-linked and previously-decided pairs.
 """
 
 import logging
+import time
 from collections.abc import Generator
 from pathlib import Path
 
@@ -120,6 +121,7 @@ class CandidateService:
             )
             return
 
+        generation_start = time.perf_counter()
         logger.info("Generating candidates for %d notes", n)
 
         # --- Step 2: Build BM25 search index ---
@@ -128,6 +130,7 @@ class CandidateService:
             message=f"Building search index for {n} notes...",
         )
 
+        t0 = time.perf_counter()
         vault_notes = scan_vault(self._vault_path)
         note_content_by_path: dict[str, str] = {
             str(note.relative_path): note.content for note in vault_notes
@@ -141,6 +144,7 @@ class CandidateService:
             for p in paths
         ]
         bm25_index = BM25Index(bm25_texts)
+        logger.info("BM25 index built for %d notes (%.2fs)", n, time.perf_counter() - t0)
 
         # --- Step 3: Compute pairwise similarity ---
         yield ProgressUpdate(
@@ -148,8 +152,13 @@ class CandidateService:
             message="Computing pairwise similarity...",
         )
 
+        t0 = time.perf_counter()
         semantic_matrix = compute_pairwise_cosine_similarity(embeddings)
         lexical_matrix = bm25_index.get_pairwise_scores()
+        logger.info(
+            "Pairwise similarity computed for %d notes (%.2fs)",
+            n, time.perf_counter() - t0,
+        )
 
         # --- Step 4: Rank and filter ---
         yield ProgressUpdate(
@@ -157,6 +166,7 @@ class CandidateService:
             message="Ranking and filtering candidates...",
         )
 
+        t0 = time.perf_counter()
         candidates = _compute_rrf_candidates(
             paths=paths,
             semantic_matrix=semantic_matrix,
@@ -184,11 +194,15 @@ class CandidateService:
         decision_filtered = before_decision_filter - len(candidates)
 
         candidates.sort(key=lambda c: c.rrf_score, reverse=True)
+        logger.info(
+            "Ranking and filtering complete (%.2fs)", time.perf_counter() - t0,
+        )
 
         logger.info(
             "Candidate generation complete: %d candidates "
-            "(%d filtered by links, %d filtered by decisions)",
+            "(%d filtered by links, %d filtered by decisions) — total time %.2fs",
             len(candidates), link_filtered, decision_filtered,
+            time.perf_counter() - generation_start,
         )
 
         self._candidates = candidates

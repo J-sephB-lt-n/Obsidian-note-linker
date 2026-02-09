@@ -81,7 +81,9 @@ def search_results(
         return HTMLResponse("")
 
     # Perform search
+    logger.info("Search request: query=%r, mode=%s", q, search_mode.value)
     results = service.search(query=q, mode=search_mode)
+    logger.info("Search returned %d results", len(results))
 
     if not results:
         return templates.TemplateResponse(request, "_search_results.html", {
@@ -115,6 +117,7 @@ def search_note_view(
     assert config is not None, "Vault must be configured"
 
     decoded_path = unquote(path)
+    logger.info("Note view requested: %s", decoded_path)
     note_path = config.vault_path / decoded_path
 
     if not note_path.is_file():

@@ -78,6 +78,10 @@ class ReviewService:
             for path, count in counts.items()
         ]
         targets.sort(key=lambda t: t.note_path)
+        logger.debug(
+            "Found %d review targets from %d candidates",
+            len(targets), len(candidates),
+        )
         return targets
 
     def get_candidates_for_target(

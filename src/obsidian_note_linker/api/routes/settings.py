@@ -31,12 +31,14 @@ async def setup_save(
     vault_path: str = Form(...),
 ) -> Response:
     """Save the vault path from the setup form and initialise vault state."""
+    logger.info("Setup save: vault_path=%s", vault_path)
     templates = request.app.state.templates
     config_service = request.app.state.config_service
 
     try:
         config = config_service.save_vault_path(vault_path=Path(vault_path))
         request.app.state.db_engine = initialize_vault_state(config=config)
+        logger.info("Vault configured successfully: %s", config.vault_path)
         return RedirectResponse(url="/", status_code=303)
     except ValueError as exc:
         logger.warning("Invalid vault path submitted: %s — %s", vault_path, exc)
@@ -70,6 +72,7 @@ async def settings_save(
     vault_path: str = Form(...),
 ) -> Response:
     """Update the vault path from the settings form."""
+    logger.info("Settings save: vault_path=%s", vault_path)
     templates = request.app.state.templates
     config_service = request.app.state.config_service
 

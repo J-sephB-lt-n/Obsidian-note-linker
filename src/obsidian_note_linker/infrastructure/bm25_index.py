@@ -7,6 +7,7 @@ triggered (not persisted to disk).
 """
 
 import logging
+import time
 
 import bm25s
 
@@ -31,10 +32,14 @@ class BM25Index:
             raise ValueError("BM25Index requires at least one document")
 
         self._num_documents = len(texts)
+        t0 = time.perf_counter()
         self._retriever = bm25s.BM25()
         self._tokens = bm25s.tokenize(texts, show_progress=False)
         self._retriever.index(self._tokens, show_progress=False)
-        logger.info("Built BM25 index over %d documents", self._num_documents)
+        logger.info(
+            "Built BM25 index over %d documents (%.2fs)",
+            self._num_documents, time.perf_counter() - t0,
+        )
 
     @property
     def num_documents(self) -> int:
@@ -52,6 +57,7 @@ class BM25Index:
             score of document ``j`` when document ``i`` is the query.
         """
         n = self._num_documents
+        t0 = time.perf_counter()
 
         # Retrieve all documents for each query
         indices, scores = self._retriever.retrieve(
@@ -67,6 +73,10 @@ class BM25Index:
                 if doc_idx != query_idx:
                     matrix[query_idx][doc_idx] = score
 
+        logger.debug(
+            "Pairwise BM25 scores: %d×%d matrix (%.2fs)",
+            n, n, time.perf_counter() - t0,
+        )
         return matrix
 
     def query(self, query_text: str, top_k: int = 10) -> list[tuple[int, float]]:

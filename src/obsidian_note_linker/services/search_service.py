@@ -7,6 +7,7 @@ generation pipeline.
 """
 
 import logging
+import time
 from pathlib import Path
 
 from sqlalchemy.engine import Engine
@@ -121,22 +122,32 @@ class SearchService:
         if not query or not query.strip():
             return []
 
+        logger.info("Search: query=%r, mode=%s, top_k=%d", query, mode.value, top_k)
+        search_start = time.perf_counter()
+
         corpus = self._load_corpus()
         if not corpus:
+            logger.info("Search aborted: no indexed notes in corpus")
             return []
 
         if mode == SearchMode.FTS:
-            return self._search_fts(
+            results = self._search_fts(
                 query=query, corpus=corpus, top_k=top_k,
             )
         elif mode == SearchMode.SEMANTIC:
-            return self._search_semantic(
+            results = self._search_semantic(
                 query=query, corpus=corpus, top_k=top_k,
             )
         else:
-            return self._search_hybrid(
+            results = self._search_hybrid(
                 query=query, corpus=corpus, top_k=top_k,
             )
+
+        logger.info(
+            "Search complete: %d results for query=%r (%.2fs)",
+            len(results), query, time.perf_counter() - search_start,
+        )
+        return results
 
     def check_readiness(self, mode: SearchMode) -> str | None:
         """Check whether the search index is ready for the given mode.
@@ -179,6 +190,7 @@ class SearchService:
             List of corpus entries with paths, content, and hashes.
             Empty list if no notes are indexed.
         """
+        t0 = time.perf_counter()
         note_records = get_all_note_records(self._engine)
         if not note_records:
             return []
@@ -206,6 +218,10 @@ class SearchService:
                 title=title,
             ))
 
+        logger.debug(
+            "Loaded corpus: %d entries (%.2fs)",
+            len(entries), time.perf_counter() - t0,
+        )
         return entries
 
     def _search_fts(
@@ -215,6 +231,7 @@ class SearchService:
         top_k: int,
     ) -> list[SearchResult]:
         """Full-text search using BM25 lexical ranking."""
+        t0 = time.perf_counter()
         texts = [entry.prepared_text for entry in corpus]
         bm25_index = BM25Index(texts)
 
@@ -230,6 +247,7 @@ class SearchService:
                 snippet=generate_snippet(entry.raw_content),
             ))
 
+        logger.debug("FTS search completed (%.2fs)", time.perf_counter() - t0)
         return results
 
     def _search_semantic(
@@ -239,6 +257,7 @@ class SearchService:
         top_k: int,
     ) -> list[SearchResult]:
         """Semantic search using embedding cosine similarity."""
+        t0 = time.perf_counter()
         if self._embedding_provider is None:
             raise ValueError(
                 "Embedding provider is required for semantic search"
@@ -280,6 +299,7 @@ class SearchService:
                 snippet=generate_snippet(entry.raw_content),
             ))
 
+        logger.debug("Semantic search completed (%.2fs)", time.perf_counter() - t0)
         return results
 
     def _search_hybrid(
@@ -289,6 +309,7 @@ class SearchService:
         top_k: int,
     ) -> list[SearchResult]:
         """Hybrid search combining FTS and semantic via RRF."""
+        t0 = time.perf_counter()
         if self._embedding_provider is None:
             raise ValueError(
                 "Embedding provider is required for hybrid search"
@@ -345,4 +366,5 @@ class SearchService:
                 snippet=generate_snippet(entry.raw_content),
             ))
 
+        logger.debug("Hybrid search completed (%.2fs)", time.perf_counter() - t0)
         return results

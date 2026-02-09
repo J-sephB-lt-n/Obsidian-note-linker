@@ -23,7 +23,8 @@ def initialize_vault_state(config: AppConfig) -> Engine:
     Returns:
         The configured database engine.
     """
+    logger.info("Initialising vault state for %s", config.vault_path)
     config.vault_state_dir.mkdir(parents=True, exist_ok=True)
     engine = create_db_engine(db_path=config.db_path)
-    logger.info("Vault state initialised for %s", config.vault_path)
+    logger.info("Vault state ready: db=%s", config.db_path)
     return engine

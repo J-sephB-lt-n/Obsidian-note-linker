@@ -239,3 +239,49 @@ All progress bars during indexing showed indeterminate animation (repeated pulsi
 - BM25 index is rebuilt from scratch on each search (not cached). For current vault size (~200 notes) this is fine, but for larger vaults a cached index would improve performance.
 - Candidate pairs and incomplete links stored in-memory only — lost on app restart, must re-index.
 - Snippet is always the first ~200 characters of stripped content — could be improved to show the most relevant passage matching the query.
+
+## Fix: Comprehensive Logging (2026-02-09)
+
+### Problem
+Application log output was essentially silent — only uvicorn access logs appeared in stdout/stderr. The root cause was that `setup_logging()` was only called in the `else` branch of `create_app()` (when no vault was configured). When the vault was already configured (the normal case), the app never called `setup_logging()`, so the root logger had no handlers and all application log messages were silently dropped.
+
+Beyond the root cause, logging coverage across the codebase was sparse — many services, routes, and infrastructure modules had loggers created but barely used, with no timing information for slow operations.
+
+### What was changed
+
+#### Root cause fix
+- **`api/app.py`**: Moved `setup_logging()` call out of the conditional branch so it is always called during app creation, regardless of whether a vault is configured.
+
+#### Services layer — added INFO-level logging with timing
+- **`indexing_service.py`**: Added timing for each indexing phase (scanning, diffing, embedding, storing) and overall total. Batch-level debug logging for embedding computation.
+- **`candidate_service.py`**: Added timing for BM25 index building, pairwise similarity computation, ranking/filtering, and overall generation time.
+- **`search_service.py`**: Added INFO logging for search requests (query, mode, result count, total time). Debug-level timing for each search mode (FTS, semantic, hybrid) and corpus loading.
+- **`integrity_service.py`**: Added INFO logging for incomplete link detection (count), and for file writes during resolution.
+- **`link_service.py`**: Added INFO logging for file writes during link application. Debug logging for pending pair count.
+- **`review_service.py`**: Added debug logging for target/candidate counts.
+- **`config_service.py`**: Added debug logging when no configuration is found.
+- **`vault_init.py`**: Added INFO logging for vault initialisation start and completion with DB path.
+
+#### Routes layer — added request-level logging
+- **`dashboard.py`**: Logs dashboard requests.
+- **`indexing.py`**: Logs indexing start, model loading, candidate generation, incomplete link detection, and stream completion. Warns on duplicate indexing requests.
+- **`review.py`**: Logs page requests, target selection (random/specific), and all decisions (YES/NO/SKIP) with target and candidate paths.
+- **`search.py`**: Logs search queries (query, mode, result count) and note view requests.
+- **`apply.py`**: Logs page requests, confirm and skip actions with pair IDs.
+- **`integrity.py`**: Logs page requests, resolve previews, and confirm actions with source/target paths and action type.
+- **`settings.py`**: Logs vault configuration save attempts (both setup and settings).
+
+#### Infrastructure layer — added logging to previously silent modules
+- **`similarity.py`**: Added logger (previously had none). Debug-level timing for pairwise cosine similarity (N×N matrix) and query similarity.
+- **`bm25_index.py`**: Added timing to index construction and pairwise score computation.
+- **`embedding_store.py`**: Added debug logging for embedding retrieval count.
+- **`model2vec_provider.py`**: Added debug logging for embed batch sizes.
+
+### Key design decisions
+- **INFO for user-visible operations** — route entry, operation start/completion, timing for slow phases. These are what you see in stdout during normal use.
+- **DEBUG for internal details** — batch-level embedding progress, corpus loading, individual similarity computations. Available by setting log level to DEBUG.
+- **Timing via `time.perf_counter()`** — high-resolution timer, shown as `(X.XXs)` in log messages for quick identification of bottlenecks.
+- **No new dependencies** — uses only stdlib `time` and `logging`.
+
+### Test suite
+- 501 tests pass. `ruff check` and `ty check` clean. No test changes required — logging additions are transparent to existing tests.

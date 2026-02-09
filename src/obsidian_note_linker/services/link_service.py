@@ -76,7 +76,9 @@ class LinkService:
         Returns:
             List of unapplied YES DecisionRecords.
         """
-        return get_pending_approved_pairs(engine=self._engine)
+        pending = get_pending_approved_pairs(engine=self._engine)
+        logger.debug("Found %d pending approved pair(s)", len(pending))
+        return pending
 
     def preview_pair(self, decision: DecisionRecord) -> PairDiffPreview:
         """Generate a diff preview for an approved pair.
@@ -226,6 +228,7 @@ class LinkService:
         hash_after = compute_content_hash(modified)
 
         atomic_write(path=full_path, content=modified)
+        logger.info("Wrote modified note: %s (linked to %s)", note_path, linked_to)
 
         save_audit_entry(
             engine=self._engine,

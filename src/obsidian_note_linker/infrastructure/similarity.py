@@ -5,7 +5,12 @@ and single-query similarity for document search.  Used during
 candidate generation and search to rank notes by semantic similarity.
 """
 
+import logging
+import time
+
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def compute_pairwise_cosine_similarity(
@@ -30,6 +35,8 @@ def compute_pairwise_cosine_similarity(
     if not embeddings:
         raise ValueError("compute_pairwise_cosine_similarity requires at least one embedding")
 
+    t0 = time.perf_counter()
+    n = len(embeddings)
     matrix = np.array(embeddings, dtype=np.float64)
 
     # Normalise each row to unit length
@@ -40,6 +47,10 @@ def compute_pairwise_cosine_similarity(
     # Cosine similarity = dot product of normalised vectors
     similarity = (normalised @ normalised.T).tolist()
 
+    logger.debug(
+        "Pairwise cosine similarity: %d×%d matrix (%.3fs)",
+        n, n, time.perf_counter() - t0,
+    )
     return similarity
 
 
@@ -66,6 +77,7 @@ def compute_query_cosine_similarity(
             "compute_query_cosine_similarity requires at least one corpus embedding"
         )
 
+    t0 = time.perf_counter()
     query = np.array(query_embedding, dtype=np.float64).reshape(1, -1)
     corpus = np.array(corpus_embeddings, dtype=np.float64)
 
@@ -82,4 +94,8 @@ def compute_query_cosine_similarity(
     # Dot product gives cosine similarity
     similarities = (corpus_normed @ query_normed.T).flatten().tolist()
 
+    logger.debug(
+        "Query cosine similarity: 1×%d corpus (%.3fs)",
+        len(corpus_embeddings), time.perf_counter() - t0,
+    )
     return similarities

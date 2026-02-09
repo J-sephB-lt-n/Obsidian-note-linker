@@ -27,6 +27,7 @@ def integrity_page(request: Request) -> Response:
     Shows count from ``app.state.incomplete_link_count``, or prompts
     the user to run indexing if detection hasn't been performed yet.
     """
+    logger.info("Integrity page requested")
     templates = request.app.state.templates
 
     incomplete_link_count: int | None = getattr(
@@ -93,6 +94,10 @@ async def resolve(request: Request) -> Response:
     action = str(form.get("action", ""))
 
     assert action in ("complete", "remove"), f"Invalid action: {action!r}"
+    logger.info(
+        "Integrity resolve: action=%s, source=%s, target=%s",
+        action, source_path, target_path,
+    )
 
     service = _get_integrity_service(request)
 
@@ -134,6 +139,10 @@ async def confirm(request: Request) -> Response:
     action = str(form.get("action", ""))
 
     assert action in ("complete", "remove"), f"Invalid action: {action!r}"
+    logger.info(
+        "Integrity confirm: action=%s, source=%s, target=%s",
+        action, source_path, target_path,
+    )
 
     service = _get_integrity_service(request)
 

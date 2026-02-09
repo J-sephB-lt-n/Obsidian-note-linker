@@ -5,6 +5,7 @@ and previously computed embeddings are reused from cache.
 """
 
 import logging
+import time
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
@@ -137,12 +138,20 @@ class IndexingService:
         Yields:
             IndexingProgress updates.  The final yield has ``result`` set.
         """
+        indexing_start = time.perf_counter()
+        logger.info("Indexing started for vault: %s", self._vault_path)
+
         # --- Phase 1: Scanning ---
         yield IndexingProgress(
             phase="scanning", current=0, total=1,
             message="Scanning vault for notes...",
         )
+        t0 = time.perf_counter()
         vault_notes = scan_vault(self._vault_path)
+        logger.info(
+            "Scanning complete: %d notes found (%.2fs)",
+            len(vault_notes), time.perf_counter() - t0,
+        )
         yield IndexingProgress(
             phase="scanning", current=1, total=1,
             message=f"Found {len(vault_notes)} notes in vault",
@@ -154,6 +163,7 @@ class IndexingService:
             message="Comparing with stored records...",
         )
 
+        t0 = time.perf_counter()
         stored_records = get_all_note_records(self._engine)
         stored_by_path: dict[str, str] = {
             r.relative_path: r.content_hash for r in stored_records
@@ -167,6 +177,13 @@ class IndexingService:
 
         notes_to_embed = new_notes + changed_notes
         total_to_embed = len(notes_to_embed)
+
+        logger.info(
+            "Diffing complete: %d new, %d changed, %d deleted, "
+            "%d unchanged (%.2fs)",
+            len(new_notes), len(changed_notes), len(deleted_paths),
+            len(unchanged_notes), time.perf_counter() - t0,
+        )
 
         yield IndexingProgress(
             phase="diffing", current=1, total=1,
@@ -208,6 +225,7 @@ class IndexingService:
 
             # Compute embeddings in batches, yielding AFTER each batch
             embeddings_computed = 0
+            embed_start = time.perf_counter()
             for batch_start in range(0, len(uncached_notes), EMBEDDING_BATCH_SIZE):
                 batch = uncached_notes[
                     batch_start : batch_start + EMBEDDING_BATCH_SIZE
@@ -220,7 +238,12 @@ class IndexingService:
                     )
                     for note in batch
                 ]
+                t0 = time.perf_counter()
                 batch_embeddings = self._provider.embed(texts)
+                logger.debug(
+                    "Embedded batch of %d notes (%.2fs)",
+                    len(batch), time.perf_counter() - t0,
+                )
                 batch_hashes = [n.content_hash for n in batch]
 
                 save_embeddings(
@@ -242,6 +265,10 @@ class IndexingService:
                         f"{len(uncached_notes)} notes"
                     ),
                 )
+            logger.info(
+                "Embedding phase complete: %d computed in %.2fs",
+                embeddings_computed, time.perf_counter() - embed_start,
+            )
         else:
             embeddings_cached = 0
             embeddings_computed = 0
@@ -251,6 +278,8 @@ class IndexingService:
 
         if total_to_store > 0:
             stored = 0
+            t0 = time.perf_counter()
+            logger.info("Storing %d record(s) in database", total_to_store)
             yield IndexingProgress(
                 phase="storing", current=0, total=total_to_store,
                 message="Updating note index...",
@@ -280,6 +309,11 @@ class IndexingService:
                     message=f"Deleted {len(deleted_paths)} stale records",
                 )
 
+            logger.info(
+                "Storing complete: %d record(s) updated (%.2fs)",
+                total_to_store, time.perf_counter() - t0,
+            )
+
         total_indexed = count_note_records(self._engine)
 
         result = IndexingResult(
@@ -294,10 +328,11 @@ class IndexingService:
 
         logger.info(
             "Indexing complete: +%d /%d -%d (=%d total), "
-            "%d embeddings computed, %d cached",
+            "%d embeddings computed, %d cached — total time %.2fs",
             result.notes_added, result.notes_updated, result.notes_deleted,
             result.total_notes_indexed,
             result.embeddings_computed, result.embeddings_cached,
+            time.perf_counter() - indexing_start,
         )
 
         yield IndexingProgress(

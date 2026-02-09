@@ -21,6 +21,7 @@ async def review_page(request: Request) -> Response:
     Shows target selection UI if candidates are available, or a
     message directing the user to run indexing first.
     """
+    logger.info("Review page requested")
     templates = request.app.state.templates
     candidates: list[CandidatePair] = _get_candidates(request)
     has_candidates = len(candidates) > 0
@@ -43,6 +44,7 @@ async def review_page(request: Request) -> Response:
 @router.get("/review/random-target")
 async def random_target(request: Request) -> Response:
     """HTMX partial: pick a random target and show its first candidate pair."""
+    logger.info("Random target requested")
     candidates = _get_candidates(request)
     service = _get_review_service(request)
 
@@ -62,6 +64,7 @@ async def random_target(request: Request) -> Response:
 @router.get("/review/select-target")
 async def select_target(request: Request) -> Response:
     """HTMX partial: show the first candidate pair for a selected target note."""
+    logger.info("Target selected: %s", request.query_params.get("path", ""))
     path_str = request.query_params.get("path", "")
     if not path_str:
         return _render_no_candidates(request)
@@ -96,6 +99,11 @@ async def decide(request: Request) -> Response:
     candidate = Path(candidate_str)
     candidates = _get_candidates(request)
     service = _get_review_service(request)
+
+    logger.info(
+        "Decision: %s for target=%s, candidate=%s",
+        decision, target_str, candidate_str,
+    )
 
     if decision in ("YES", "NO"):
         service.record_decision(

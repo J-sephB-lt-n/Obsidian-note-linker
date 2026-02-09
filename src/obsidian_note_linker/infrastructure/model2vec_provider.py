@@ -52,5 +52,6 @@ class Model2VecProvider:
             List of embedding vectors, one per input text.
         """
         assert len(texts) > 0, "Cannot embed an empty list of texts"
+        logger.debug("Embedding %d text(s)", len(texts))
         embeddings = self._model.encode(texts)
         return embeddings.tolist()

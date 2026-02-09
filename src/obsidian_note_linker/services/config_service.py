@@ -26,7 +26,10 @@ class ConfigService:
         Returns:
             AppConfig if configured, None otherwise.
         """
-        return config_store.load_config(config_path=self._config_path)
+        config = config_store.load_config(config_path=self._config_path)
+        if config is None:
+            logger.debug("No configuration found at %s", self._config_path)
+        return config
 
     def is_configured(self) -> bool:
         """Check whether a vault has been configured.

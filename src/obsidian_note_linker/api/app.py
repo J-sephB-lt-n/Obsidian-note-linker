@@ -47,13 +47,14 @@ def create_app(config_path: Path | None = None) -> FastAPI:
     app.state.incomplete_links = None
     app.state.incomplete_link_count = None
 
+    # Always configure logging first — without this, the root logger has
+    # no handlers and all application log messages are silently dropped.
+    setup_logging()
+
     # Load existing config and initialise vault state
     config = app.state.config_service.load_config()
     if config is not None:
         app.state.db_engine = initialize_vault_state(config=config)
-    else:
-        # Console-only logging until vault is configured
-        setup_logging()
 
     # --- Middleware -----------------------------------------------------------
 

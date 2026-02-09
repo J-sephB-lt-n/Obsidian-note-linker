@@ -132,7 +132,9 @@ def get_all_embeddings(engine: Engine) -> dict[str, list[float]]:
     """
     with Session(engine) as session:
         records = session.exec(select(EmbeddingRecord)).all()
-        return {r.content_hash: bytes_to_embedding(r.embedding) for r in records}
+        result = {r.content_hash: bytes_to_embedding(r.embedding) for r in records}
+        logger.debug("Loaded %d embedding(s) from database", len(result))
+        return result
 
 
 def count_embeddings(engine: Engine) -> int:

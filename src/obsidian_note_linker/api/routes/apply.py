@@ -22,6 +22,7 @@ def apply_page(request: Request) -> Response:
 
     Uses a synchronous handler so FastAPI runs it in a thread pool.
     """
+    logger.info("Apply page requested")
     templates = request.app.state.templates
     engine = request.app.state.db_engine
 
@@ -83,6 +84,7 @@ async def confirm_pair(request: Request) -> Response:
     """Apply links for a confirmed pair, then show the next one."""
     form = await request.form()
     pair_id = int(str(form.get("pair_id", "0")))
+    logger.info("Confirm apply for pair_id=%d", pair_id)
 
     service = _get_link_service(request)
     decision = _find_decision(service, pair_id)
@@ -106,6 +108,7 @@ async def skip_pair(request: Request) -> Response:
     """Skip a pair without applying and show the next one."""
     form = await request.form()
     pair_id = int(str(form.get("pair_id", "0")))
+    logger.info("Skip apply for pair_id=%d", pair_id)
 
     service = _get_link_service(request)
 

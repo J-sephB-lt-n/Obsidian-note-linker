@@ -36,7 +36,9 @@ async def indexing_start(request: Request) -> Response:
     fragment replaces the button area and opens an SSE connection
     to ``/indexing/stream``.
     """
+    logger.info("Indexing start requested")
     if request.app.state.is_indexing:
+        logger.warning("Indexing already in progress, rejecting request")
         return HTMLResponse(
             '<article><p>Indexing is already in progress.</p></article>',
             status_code=409,
@@ -76,6 +78,7 @@ async def indexing_stream(request: Request) -> StreamingResponse:
 
     async def generate() -> AsyncGenerator[str, None]:
         request.app.state.is_indexing = True
+        logger.info("Indexing stream started")
         try:
             # --- Load embedding provider (cached after first call) ---
             yield _format_sse(
@@ -83,9 +86,11 @@ async def indexing_stream(request: Request) -> StreamingResponse:
                 "<progress></progress><p>Loading embedding model...</p>",
             )
 
+            logger.info("Loading embedding model")
             provider = await asyncio.to_thread(
                 _get_or_create_provider, request.app.state,
             )
+            logger.info("Embedding model ready")
 
             # --- Run indexing ---
             service = IndexingService(
@@ -111,6 +116,7 @@ async def indexing_stream(request: Request) -> StreamingResponse:
                     yield _format_sse("progress", _render_progress(progress))
 
             # --- Generate candidates after indexing ---
+            logger.info("Starting candidate generation")
             candidate_service = CandidateService(
                 engine=request.app.state.db_engine,
                 vault_path=config.vault_path,
@@ -132,8 +138,10 @@ async def indexing_stream(request: Request) -> StreamingResponse:
             request.app.state.candidates = candidate_service._candidates
             candidate_count = candidates
             request.app.state.candidate_count = candidate_count
+            logger.info("Candidate generation complete: %d candidates", candidate_count)
 
             # --- Detect incomplete links after candidate generation ---
+            logger.info("Starting incomplete link detection")
             yield _format_sse(
                 "progress",
                 _render_progress(ProgressUpdate(
@@ -149,6 +157,7 @@ async def indexing_stream(request: Request) -> StreamingResponse:
             )
             request.app.state.incomplete_links = incomplete_links
             request.app.state.incomplete_link_count = len(incomplete_links)
+            logger.info("Incomplete link detection complete: %d found", len(incomplete_links))
 
             yield _format_sse(
                 "progress",
@@ -181,6 +190,7 @@ async def indexing_stream(request: Request) -> StreamingResponse:
             )
         finally:
             request.app.state.is_indexing = False
+            logger.info("Indexing stream finished")
 
     return StreamingResponse(
         generate(),

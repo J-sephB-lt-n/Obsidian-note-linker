@@ -25,6 +25,7 @@ def dashboard(request: Request) -> Response:
     Uses a synchronous handler so FastAPI runs it in a thread pool,
     avoiding blocking the event loop during vault scanning.
     """
+    logger.info("Dashboard requested")
     config = request.app.state.config_service.load_config()
     templates = request.app.state.templates
     engine = request.app.state.db_engine

@@ -67,11 +67,14 @@ def detect_incomplete_links(vault_path: Path) -> list[IncompleteLink]:
     Returns:
         Sorted list of ``IncompleteLink`` instances.
     """
+    logger.info("Detecting incomplete links in vault: %s", vault_path)
     notes = scan_vault(vault_path)
     notes_by_path: dict[Path, str] = {
         note.relative_path: note.content for note in notes
     }
-    return get_incomplete_link_pairs(notes_by_path)
+    incomplete = get_incomplete_link_pairs(notes_by_path)
+    logger.info("Found %d incomplete link(s)", len(incomplete))
+    return incomplete
 
 
 class IntegrityService:
@@ -285,6 +288,7 @@ class IntegrityService:
         hash_after = compute_content_hash(modified)
 
         atomic_write(path=full_path, content=modified)
+        logger.info("Wrote modified note: %s (action=%s)", note_path, action)
 
         save_audit_entry(
             engine=self._engine,
